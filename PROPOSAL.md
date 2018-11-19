@@ -32,3 +32,7 @@ A quote from NetworkWorld about distributed MapReduce on a GPU explains, "most o
 - Pegged memory
 - Other advanced CUDA topics
 - Compare with traditional MapReduce programs eg. Hadoop
+
+
+## Milestones 1
+[Word Count](https://github.com/SiyuZheng/WordCount)
