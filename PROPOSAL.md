@@ -1,6 +1,6 @@
 Distributed map reduce with GPU acceleration
 ======================
-**Authors:** Edward Atter, Siyu Zheng
+**Authors:** Edward Atter, Siyu Zheng, Yan Wu
 
 ## Overview
 Map reduce is an important algorithm in the age of big data. It serves as a template, allowing other programmers to efficiently build a program capable of processing enourmous amounts of data using the power of distriuted computing. The basic example is word count, but it's applications expand much further to other well known algorithms such as Google's PageRank and friend recommendation systems. 
