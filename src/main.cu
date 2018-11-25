@@ -4,9 +4,11 @@
 
 #include "KeyValue.h"
 
-#define MAX_LINES 1024
+#define MAX_LINES_FILE_READ 1024
+#define EMITS_PER_LINE 10
+#define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
 
-void loadFile(char fname[], KeyValuePair** kvs, int* length) {
+__host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 	FILE* fp = fopen(fname, "r");
 	if (fp == NULL)
 	    exit(EXIT_FAILURE);
@@ -25,16 +27,70 @@ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 	*length = line_num;
 }
 
-int main(int argc, char* argv[]) {
-	std::cout << "Running\n";
-	int length = 0;
-	KeyValuePair* kvs[MAX_LINES];
-	loadFile("LICENSE", kvs, &length);
-	printf("Length: %i\n", length);
-
+__host__ __device__ void printKeyValues(KeyValuePair** kvs, int length) {
 	for(int i = 0; i < length; i++) {
-		printf("%s \t %s\n", kvs[i]->key, kvs[i]->value);
+		if (kvs[i] == NULL) {
+			printf("[%i = null]\n", i);
+		} else {
+			printf("%s \t %s\n", kvs[i]->key, kvs[i]->value);
+		}
 	}
+}
+
+__host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
+	out[n] = new KeyValuePair(kv);
+}
+
+__host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n) {
+	char* tokens = strtok(kv.value, " ,.-\t");
+	int i = 0;
+	while (tokens != NULL) {
+		if (i >= EMITS_PER_LINE) {
+			printf("WARN: Exceeded emit limit\n");
+			return;
+		}
+		emit(KeyValuePair(tokens, "1"), out, n + i);
+		tokens = strtok(NULL, " ,.-\t");
+		i++;
+	}
+}
+
+__host__ void cpuMap(KeyValuePair** in, KeyValuePair** out, int length) {
+	for (int i = 0; i < length; i++) {
+		map(*in[i], out, i * EMITS_PER_LINE);
+	}
+}
+
+__global__ void kernMap(KeyValuePair** in, KeyValuePair** out, int length) {
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= length) return;
+
+	map(*in[i], out, i * EMITS_PER_LINE);
+}
+
+__host__ int main(int argc, char* argv[]) {
+	std::cout << "Running\n";
+
+	// Load file
+	int length = 0;
+	KeyValuePair* file_kvs[MAX_LINES_FILE_READ] = {NULL};
+	loadFile("LICENSE", file_kvs, &length);
+	//printf("Length: %i\n", length);
+	//printKeyValues(kvs, length);
+
+	// Map stage
+	KeyValuePair* map_kvs[MAX_EMITS] = {NULL};
+	cpuMap(file_kvs, map_kvs, length);
+	printKeyValues(map_kvs, MAX_EMITS);
+
+	//Remove any null references (stream compaction)
+	//TODO
+
+	// Sort filtered map output
+	//TODO
+
+	// Reduce stage
+	//TODO
 
 	std::cout << "Done\n";
 	return 0;
