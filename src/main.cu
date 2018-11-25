@@ -1,6 +1,11 @@
 #include <string>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+
+#include <cuda_runtime.h>
+#include <thrust/device_vector.h>
+#include <thrust/sort.h>
 
 #include "KeyValue.h"
 
@@ -70,7 +75,6 @@ __global__ void kernMap(KeyValuePair** in, KeyValuePair** out, int length) {
 
 __host__ int main(int argc, char* argv[]) {
 	std::cout << "Running\n";
-
 	// Load file
 	int length = 0;
 	KeyValuePair* file_kvs[MAX_LINES_FILE_READ] = {NULL};
@@ -80,14 +84,24 @@ __host__ int main(int argc, char* argv[]) {
 
 	// Map stage
 	KeyValuePair* map_kvs[MAX_EMITS] = {NULL};
+	for (int i = 0; i < MAX_EMITS; i++) { map_kvs[i] = 0; }
 	cpuMap(file_kvs, map_kvs, length);
-	printKeyValues(map_kvs, MAX_EMITS);
+	//printKeyValues(map_kvs, MAX_EMITS);
 
 	//Remove any null references (stream compaction)
 	//TODO
 
 	// Sort filtered map output
-	//TODO
+	/*
+	KeyValuePair** dev_map_kvs;
+	int sz = MAX_EMITS * sizeof(KeyValuePair*);
+	cudaMalloc(&dev_map_kvs, sz);
+	cudaMemcpy(dev_map_kvs, map_kvs, sz, cudaMemcpyHostToDevice);
+	thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
+	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
+	*/
+	std::sort(map_kvs, map_kvs + MAX_EMITS, KVComparator());
+	printKeyValues(map_kvs, MAX_EMITS);
 
 	// Reduce stage
 	//TODO

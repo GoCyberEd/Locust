@@ -2,17 +2,16 @@
 
 class KeyValuePair {
 	public:
-		KeyValuePair();
-		KeyValuePair(int k_num, char* v);
-		KeyValuePair(char* k, char* v);
-		void set(char* k, char* v);
+		__host__ KeyValuePair();
+		__host__ KeyValuePair(int k_num, char* v);
+		__host__ KeyValuePair(char* k, char* v);
+		__host__ void set(char* k, char* v);
+		__host__ static void to_string(const KeyValuePair* kv, char* s);
 		char* key;
 		char* value;
 };
 
 class KVComparator {
 public:
-	__host__ __device__ bool operator() (const KeyValuePair &kv1, const KeyValuePair &kv2) {
-		return kv1.key < kv2.key;
-	}
+	__host__ bool operator() (const KeyValuePair *kv1, const KeyValuePair *kv2);
 };
