@@ -6,6 +6,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake" ${CMAKE_MODULE_PATH})
 
 # Enable C++11 for host code
 set(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 list(APPEND CUDA_NVCC_FLAGS_DEBUG -G -g)
 list(APPEND CUDA_NVCC_FLAGS_RELWITHDEBUGINFO -lineinfo)
@@ -25,6 +26,7 @@ include_directories(.)
 
 cuda_add_executable(${CMAKE_PROJECT_NAME}
     "src/main.cu"
+    "src/KeyValue.cu"
     )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
