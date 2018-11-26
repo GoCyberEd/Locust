@@ -115,34 +115,6 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 }
 
 __host__ int main(int argc, char* argv[]) {
-	//// str function test
-	//char src_str[] = "C programming language";
-	//const char* sp = src_str;
-	//char dst_str[100];
-	//char* dp = dst_str;
-	//printf("dst_str: %d\n", my_strlen(my_strcpy(dp, sp)));
-	//std::cout << dp << std::endl;
-
-	//char str[] = "- This, a sample string.";
-	//char * pch;
-	//printf("Splitting string \"%s\" into tokens:\n", str);
-	//pch = my_strtok(str, " ,.-");
-	//while (pch != NULL)
-	//{
-	//	printf("%s\n", pch);
-	//	pch = my_strtok(NULL, " ,.-");
-	//}
-
-	//char str2[] = "- 2222This, a sample string.";
-	//char * pch2;
-	//printf("Splitting string \"%s\" into tokens:\n", str2);
-	//pch2 = my_strtok(str2, " ,.-");
-	//while (pch2 != NULL)
-	//{
-	//	printf("%s\n", pch2);
-	//	pch2 = my_strtok(NULL, " ,.-");
-	//}
-
 	std::cout << "Running\n";
 	// Load file
 	int length = 0;
