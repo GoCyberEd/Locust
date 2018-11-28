@@ -14,7 +14,7 @@
 #define MAX_LINES_FILE_READ 1024
 #define EMITS_PER_LINE 10
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
-#define GPU_IMPLEMENTATION 0
+#define GPU_IMPLEMENTATION 1
 
 __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 	std::ifstream input(fname);
@@ -94,6 +94,7 @@ __host__ void reduce(int start, int end, KeyValuePair** in, KeyValuePair** out, 
 	out[n] = new KeyValuePair(key, value);
 }
 
+
 __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 	if (in[0] == NULL) return;
 
@@ -112,6 +113,18 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 			n++; //TODO this math doesn't work out, ensure we can't overflow keys
 		}
 	}
+}
+
+void GPUMapReduce(KeyValuePair* map_kvs, int length) {
+	KeyValuePair** dev_map_kvs;
+	int sz = MAX_EMITS * sizeof(KeyValuePair*);
+	cudaMalloc(&dev_map_kvs, sz);
+	cudaMemcpy(dev_map_kvs, map_kvs, sz, cudaMemcpyHostToDevice);
+	kernMap << <1024, 1024 >> > (map_kvs, dev_map_kvs, length);
+	thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
+	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
+	printKeyValues(dev_map_kvs, length);
+	cudaFree(dev_map_kvs);
 }
 
 __host__ int main(int argc, char* argv[]) {
@@ -136,9 +149,12 @@ __host__ int main(int argc, char* argv[]) {
 	KeyValuePair** dev_map_kvs;
 	int sz = MAX_EMITS * sizeof(KeyValuePair*);
 	cudaMalloc(&dev_map_kvs, sz);
-	cudaMemcpy(dev_map_kvs, map_kvs, sz, cudaMemcpyHostToDevice);
+	cudaMemcpy(dev_map_kvs, file_kvs, sz, cudaMemcpyHostToDevice);
+	kernMap << <1024, 1024 >> > (file_kvs, dev_map_kvs, length);
 	thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
 	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
+	printKeyValues(dev_map_kvs, length);
+	cudaFree(dev_map_kvs);
 	
 #else
 	cpuMap(file_kvs, map_kvs, length);
@@ -148,8 +164,9 @@ __host__ int main(int argc, char* argv[]) {
 	KeyValuePair* reduce_kvs[MAX_EMITS] = {NULL};
 	cpuReduce(map_kvs, reduce_kvs, MAX_EMITS);
 	std::sort(reduce_kvs, reduce_kvs + MAX_EMITS, KVComparator());
-#endif
 	printKeyValues(reduce_kvs, MAX_EMITS);
+#endif
+	
 
 	std::cout << "Done\n";
 	return 0;
