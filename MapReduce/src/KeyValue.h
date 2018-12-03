@@ -8,9 +8,11 @@ class KeyValuePair {
 		__host__ KeyValuePair(int k_num, char* v);
 		__host__ KeyValuePair(char* k, char* v);
 		__host__ void set(char* k, char* v);
+		__host__ KeyValuePair* to_device();
 		__host__ static void to_string(const KeyValuePair* kv, char* s);
 		char* key;
 		char* value;
+		bool is_empty;
 };
 
 class KVComparator {

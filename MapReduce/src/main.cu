@@ -14,7 +14,7 @@
 #define MAX_LINES_FILE_READ 1024
 #define EMITS_PER_LINE 10
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
-#define GPU_IMPLEMENTATION 0
+#define GPU_IMPLEMENTATION 1
 
 #define WINDOWS 0
 #define LINUX 1
@@ -134,6 +134,42 @@ void GPUMapReduce(KeyValuePair* map_kvs, int length) {
 	cudaFree(dev_map_kvs);
 }
 
+// host_array the array of KV pointers, should be sorted and NULL terminated
+// dev_array will be newly allocated and the pointer returned
+__host__ KeyValuePair** copyKVPairToCuda(KeyValuePair** host_array, int length) {
+	/*
+	// Allocate memory on device
+	KeyValuePair** dev_map_kvs;
+	int sz = sizeof(KeyValuePair**) * length;
+	cudaMalloc(&dev_map_kvs, sz);
+
+	// For each element, copy the actual KeyValue object into cuda memory and update
+	// reference in list
+	int i = 0;
+	while (host_array[i] != NULL) {
+		cudaMalloc(&dev_map_kvs[i], sizeof(KeyValuePair));
+		// Copy actual object
+		// host_array[i] may need to be dereferenced?
+		cudaMemcpy(dev_map_kvs[i], host_array[i], sizeof(KeyValuePair), cudaMemcpyHostToDevice);
+		i++;
+	} */
+	// Step 1: Create host array of device pointers
+	KeyValuePair* host_of_device[length] = { NULL };
+	int i = 0;
+	while (host_array[i] != NULL && i < length) {
+		host_of_device[i] = host_array[i]->to_device();
+		i++;
+	}
+
+	// Step 2: Move host array to device
+	KeyValuePair** dev_kvs;
+	int sz = sizeof(KeyValuePair**) * length;
+	cudaMalloc(&dev_kvs, sz);
+	cudaMemcpy(dev_kvs, host_of_device, sz, cudaMemcpyHostToDevice);
+
+	return dev_kvs;
+}
+
 __host__ int main(int argc, char* argv[]) {
 	std::cout << "Running\n";
 	// Load file
@@ -153,15 +189,19 @@ __host__ int main(int argc, char* argv[]) {
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	
+	KeyValuePair** dev_file_kvs = copyKVPairToCuda(file_kvs, MAX_LINES_FILE_READ);
+
+	/*
 	KeyValuePair** dev_map_kvs;
 	int sz = MAX_EMITS * sizeof(KeyValuePair*);
-	cudaMalloc(&dev_map_kvs, sz);
+	cudaMalloc(dev_map_kvs, sz);
 	cudaMemcpy(dev_map_kvs, file_kvs, sz, cudaMemcpyHostToDevice);
 	kernMap << <1024, 1024 >> > (file_kvs, dev_map_kvs, length);
 	thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
 	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
 	printKeyValues(dev_map_kvs, length);
 	cudaFree(dev_map_kvs);
+	*/
 	
 #else
 	cpuMap(file_kvs, map_kvs, length);
@@ -174,6 +214,6 @@ __host__ int main(int argc, char* argv[]) {
 	printKeyValues(reduce_kvs, MAX_EMITS);
 #endif
 	
-	std::cout << "Done\n";
+	std::cout << "\nDone\n";
 	return 0;
 }

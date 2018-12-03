@@ -1,12 +1,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>  
+#include <cuda_runtime.h>
 
 #include "KeyValue.h"
 
 KeyValuePair::KeyValuePair() {
 	key = NULL;
 	value = NULL;
+	is_empty = 1;
 }
 
 KeyValuePair::KeyValuePair(int k_num, char* v) {
@@ -27,6 +29,26 @@ void KeyValuePair::set(char* k, char* v) {
 
 	key = key_ptr;
 	value = val_ptr;
+	is_empty = 0;
+}
+
+KeyValuePair* KeyValuePair::to_device() {
+	char* dev_k = NULL;
+	cudaMalloc(&dev_k, sizeof(char) * strlen(key));
+	cudaMemcpy(dev_k, key, sizeof(char) * strlen(key), cudaMemcpyHostToDevice);
+	char *dev_v = NULL;
+	cudaMalloc(&dev_v, sizeof(char) * strlen(value));
+	cudaMemcpy(dev_v, value, sizeof(char) * strlen(value), cudaMemcpyHostToDevice);
+
+	KeyValuePair* dev_kv = NULL;
+	cudaMalloc((void**)&dev_kv, sizeof(KeyValuePair));
+	KeyValuePair tmp_kv = KeyValuePair();
+	tmp_kv.key = dev_k;
+	tmp_kv.value = dev_v;
+	tmp_kv.is_empty = is_empty;
+	cudaMemcpy(dev_kv, &tmp_kv, sizeof(KeyValuePair), cudaMemcpyHostToDevice);
+
+	return dev_kv;
 }
 
 void KeyValuePair::to_string(const KeyValuePair* kv, char* s) {
