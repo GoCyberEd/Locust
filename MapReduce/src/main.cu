@@ -90,8 +90,8 @@ __host__ void cpuMap(KeyValuePair** in, KeyValuePair** out, int length) {
 __global__ void kernMap(KeyValuePair** in, KeyValuePair** out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
-
-	map(*in[i], out, i * EMITS_PER_LINE);
+	printf("Reading input key: %s, %s", in[i]->key, in[i]->value);
+	//map(*in[i], out, i * EMITS_PER_LINE);
 }
 
 __host__ void reduce(int start, int end, KeyValuePair** in, KeyValuePair** out, int n) {
