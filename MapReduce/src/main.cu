@@ -188,20 +188,23 @@ __host__ int main(int argc, char* argv[]) {
 	//TODO
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
-	
 	KeyValuePair** dev_file_kvs = copyKVPairToCuda(file_kvs, MAX_LINES_FILE_READ);
 
-	/*
+	KeyValuePair* null_array[MAX_EMITS] = { NULL };
+
 	KeyValuePair** dev_map_kvs;
 	int sz = MAX_EMITS * sizeof(KeyValuePair*);
-	cudaMalloc(dev_map_kvs, sz);
-	cudaMemcpy(dev_map_kvs, file_kvs, sz, cudaMemcpyHostToDevice);
-	kernMap << <1024, 1024 >> > (file_kvs, dev_map_kvs, length);
-	thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
+	cudaMalloc(&dev_map_kvs, sz);
+	cudaMemcpy(dev_map_kvs, null_array, sz, cudaMemcpyHostToDevice);
+	kernMap << <1024, 1024 >> > (dev_file_kvs, dev_map_kvs, length);
+	thrust::device_ptr<KeyValuePair*> dev_ptr(dev_map_kvs);
 	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
-	printKeyValues(dev_map_kvs, length);
+	// Can't print these, it's mapped to device ptrs
+	//printKeyValues(dev_map_kvs, length);
+	// TODO: This doesn't free the actual KV objects, just the arrays.
+	cudaFree(dev_file_kvs);
 	cudaFree(dev_map_kvs);
-	*/
+	//*/
 	
 #else
 	cpuMap(file_kvs, map_kvs, length);
