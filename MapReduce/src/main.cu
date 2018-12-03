@@ -14,9 +14,14 @@
 #define MAX_LINES_FILE_READ 1024
 #define EMITS_PER_LINE 10
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
-#define GPU_IMPLEMENTATION 1
+#define GPU_IMPLEMENTATION 0
+
+#define WINDOWS 0
+#define LINUX 1
+#define COMPILE_OS LINUX
 
 __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
+#if COMPILE_OS == WINDOWS
 	std::ifstream input(fname);
 	int line_num = 0;
 	for (std::string line; getline(input, line); )
@@ -28,22 +33,24 @@ __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 		delete[] cstr;
 	}
 	*length = line_num;
-	//FILE* fp = fopen(fname, "r");
-	//if (fp == NULL)
-	//    exit(EXIT_FAILURE);
+#elif COMPILE_OS == LINUX
+	FILE* fp = fopen(fname, "r");
+	if (fp == NULL)
+	    exit(EXIT_FAILURE);
 
-	//char* line = NULL;
-	//size_t len = 0;
-	//int line_num = 0;
-	//while ((getline(&line, &len, fp)) != -1) {
-	//    //printf("%s", line);
-	//    kvs[line_num] = new KeyValuePair(line_num, line);
-	//    line_num ++;
-	//}
-	//fclose(fp);
-	//if (line)
-	//    free(line);
-	//*length = line_num;
+	char* line = NULL;
+	size_t len = 0;
+	int line_num = 0;
+	while ((getline(&line, &len, fp)) != -1) {
+	    //printf("%s", line);
+	    kvs[line_num] = new KeyValuePair(line_num, line);
+	    line_num ++;
+	}
+	fclose(fp);
+	if (line)
+	    free(line);
+	*length = line_num;
+#endif
 }
 
 __host__ __device__ void printKeyValues(KeyValuePair** kvs, int length) {
@@ -120,9 +127,9 @@ void GPUMapReduce(KeyValuePair* map_kvs, int length) {
 	int sz = MAX_EMITS * sizeof(KeyValuePair*);
 	cudaMalloc(&dev_map_kvs, sz);
 	cudaMemcpy(dev_map_kvs, map_kvs, sz, cudaMemcpyHostToDevice);
-	kernMap << <1024, 1024 >> > (map_kvs, dev_map_kvs, length);
-	thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
-	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
+	//kernMap << <1024, 1024 >> > (map_kvs, dev_map_kvs, length);
+	//thrust::device_ptr<KeyValuePair> dev_ptr(*dev_map_kvs);
+	//thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
 	printKeyValues(dev_map_kvs, length);
 	cudaFree(dev_map_kvs);
 }
@@ -132,7 +139,7 @@ __host__ int main(int argc, char* argv[]) {
 	// Load file
 	int length = 0;
 	KeyValuePair* file_kvs[MAX_LINES_FILE_READ] = {NULL};
-	loadFile("license", file_kvs, &length);
+	loadFile("../LICENSE", file_kvs, &length);
 	//printf("Length: %i\n", length);
 	//printKeyValues(kvs, length);
 
@@ -167,7 +174,6 @@ __host__ int main(int argc, char* argv[]) {
 	printKeyValues(reduce_kvs, MAX_EMITS);
 #endif
 	
-
 	std::cout << "Done\n";
 	return 0;
 }
