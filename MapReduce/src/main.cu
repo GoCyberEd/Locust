@@ -8,6 +8,7 @@
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
+#include <chrono>
 #include "util.h"
 #include "KeyValue.h"
 
@@ -90,7 +91,7 @@ __host__ void cpuMap(KeyValuePair** in, KeyValuePair** out, int length) {
 __global__ void kernMap(KeyValuePair** in, KeyValuePair** out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
-	printf("Reading input key: %s, %s", in[i]->key, in[i]->value);
+	//printf("Reading input key: %s, %s", in[i]->key, in[i]->value);
 	map(*in[i], out, i * EMITS_PER_LINE, 1);
 }
 
@@ -143,6 +144,8 @@ __host__ KeyValuePair** copyKVPairToCuda(KeyValuePair** host_array, int length) 
 }
 
 __host__ int main(int argc, char* argv[]) {
+	typedef std::chrono::high_resolution_clock Clock;
+
 	std::cout << "Running\n";
 	// Load file
 	int length = 0;
@@ -168,9 +171,12 @@ __host__ int main(int argc, char* argv[]) {
 	int sz = MAX_EMITS * sizeof(KeyValuePair*);
 	cudaMalloc(&dev_map_kvs, sz);
 	cudaMemcpy(dev_map_kvs, null_array, sz, cudaMemcpyHostToDevice);
+	auto t0 = Clock::now();
 	kernMap << <1024, 1024 >> > (dev_file_kvs, dev_map_kvs, length);
-	thrust::device_ptr<KeyValuePair*> dev_ptr(dev_map_kvs);
-	thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
+	auto t1 = Clock::now();
+	printf("%d nanoseconds \n", t1 - t0);
+	//thrust::device_ptr<KeyValuePair*> dev_ptr(dev_map_kvs);
+	//thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
 	// Can't print these, it's mapped to device ptrs
 	//printKeyValues(dev_map_kvs, length);
 	// TODO: This doesn't free the actual KV objects, just the arrays.
@@ -179,14 +185,17 @@ __host__ int main(int argc, char* argv[]) {
 	//*/
 	
 #else
+	auto t0 = Clock::now();
 	cpuMap(file_kvs, map_kvs, length);
+	auto t1 = Clock::now();
+	printf("%d nanoseconds \n", t1 - t0);
 	std::sort(map_kvs, map_kvs + MAX_EMITS, KVComparator());
 
 	// Reduce stage
 	KeyValuePair* reduce_kvs[MAX_EMITS] = {NULL};
 	cpuReduce(map_kvs, reduce_kvs, MAX_EMITS);
 	std::sort(reduce_kvs, reduce_kvs + MAX_EMITS, KVComparator());
-	printKeyValues(reduce_kvs, MAX_EMITS);
+	//printKeyValues(reduce_kvs, MAX_EMITS);
 #endif
 	
 	std::cout << "\nDone\n";
