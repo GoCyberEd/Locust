@@ -67,7 +67,7 @@ __host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
 	out[n] = new KeyValuePair(kv);
 }
 
-__host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n) {
+__host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n, bool is_device) {
 	char* tokens = my_strtok(kv.value, " ,.-\t");
 	int i = 0;
 	while (tokens != NULL) {
@@ -75,7 +75,7 @@ __host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n) {
 			printf("WARN: Exceeded emit limit\n");
 			return;
 		}
-		emit(KeyValuePair(tokens, "1"), out, n + i);
+		emit(KeyValuePair(tokens, "1", is_device), out, n + i);
 		tokens = my_strtok(NULL, " ,.-\t");
 		i++;
 	}
@@ -83,7 +83,7 @@ __host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n) {
 
 __host__ void cpuMap(KeyValuePair** in, KeyValuePair** out, int length) {
 	for (int i = 0; i < length; i++) {
-		map(*in[i], out, i * EMITS_PER_LINE);
+		map(*in[i], out, i * EMITS_PER_LINE, 0);
 	}
 }
 
@@ -91,7 +91,7 @@ __global__ void kernMap(KeyValuePair** in, KeyValuePair** out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
 	printf("Reading input key: %s, %s", in[i]->key, in[i]->value);
-	//map(*in[i], out, i * EMITS_PER_LINE);
+	map(*in[i], out, i * EMITS_PER_LINE, 1);
 }
 
 __host__ void reduce(int start, int end, KeyValuePair** in, KeyValuePair** out, int n) {

@@ -4,11 +4,18 @@
 #include <cuda_runtime.h>
 
 #include "KeyValue.h"
+#include "util.h"
 
 KeyValuePair::KeyValuePair() {
 	key = NULL;
 	value = NULL;
-	is_empty = 1;
+	is_device = 0;
+}
+
+KeyValuePair::KeyValuePair(bool dev) {
+	key = NULL;
+	value = NULL;
+	is_device = dev;
 }
 
 KeyValuePair::KeyValuePair(int k_num, char* v) {
@@ -21,15 +28,20 @@ KeyValuePair::KeyValuePair(char* k, char* v) {
 	set(k, v);
 }
 
+KeyValuePair::KeyValuePair(char* k, char* v, bool dev) {
+	set(k, v);
+	is_device = dev;
+}
+
 void KeyValuePair::set(char* k, char* v) {
-	char* key_ptr = (char*) malloc(sizeof(char) * strlen(k) + 1);
+	char* key_ptr = (char*) malloc(sizeof(char) * my_strlen(k) + 1);
 	strcpy(key_ptr, k);
-	char* val_ptr = (char*) malloc(sizeof(char) * strlen(v) + 1);
+	char* val_ptr = (char*) malloc(sizeof(char) * my_strlen(v) + 1);
 	strcpy(val_ptr, v);
 
 	key = key_ptr;
 	value = val_ptr;
-	is_empty = 0;
+	is_device = 0;
 }
 
 KeyValuePair* KeyValuePair::to_device() {
@@ -45,7 +57,7 @@ KeyValuePair* KeyValuePair::to_device() {
 	KeyValuePair tmp_kv = KeyValuePair();
 	tmp_kv.key = dev_k;
 	tmp_kv.value = dev_v;
-	tmp_kv.is_empty = is_empty;
+	tmp_kv.is_device = 1; //It is a device obj now!
 	cudaMemcpy(dev_kv, &tmp_kv, sizeof(KeyValuePair), cudaMemcpyHostToDevice);
 
 	return dev_kv;

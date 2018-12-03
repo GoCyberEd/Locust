@@ -5,14 +5,16 @@
 class KeyValuePair {
 	public:
 		__host__ KeyValuePair();
+		__host__ __device__ KeyValuePair(bool is_device);
 		__host__ KeyValuePair(int k_num, char* v);
 		__host__ KeyValuePair(char* k, char* v);
-		__host__ void set(char* k, char* v);
+		__host__ __device__ KeyValuePair(char* k, char* v, bool is_device);
+		__host__ __device__ void set(char* k, char* v);
 		__host__ KeyValuePair* to_device();
 		__host__ static void to_string(const KeyValuePair* kv, char* s);
 		char* key;
 		char* value;
-		bool is_empty;
+		bool is_device;
 };
 
 class KVComparator {
