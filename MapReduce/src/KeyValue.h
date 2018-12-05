@@ -4,20 +4,20 @@
 
 struct KeyValuePair {
 	public:
-		__host__ __device__ KeyValuePair();
-		__host__ __device__ KeyValuePair(bool is_device);
-		__host__ KeyValuePair(int k_num, char* v);
-		__host__ KeyValuePair(char* k, char* v);
-		__host__ __device__ KeyValuePair(char* k, char* v, bool is_device);
-		__host__ __device__ void set(char* k, char* v);
-		__host__ KeyValuePair* to_device();
-		__host__ __device__ KeyValuePair* to_host();
-		__host__ static void to_string(const KeyValuePair* kv, char* s);
+		//__host__ __device__ KeyValuePair();
+		//__host__ __device__ KeyValuePair(bool is_device);
+		//__host__ KeyValuePair(int k_num, char* v);
+		//__host__ KeyValuePair(char* k, char* v);
+		//__host__ __device__ KeyValuePair(char* k, char* v, bool is_device);
+		//__host__ __device__ void set(char* k, char* v);
+		//__host__ KeyValuePair* to_device();
+		//__host__ __device__ KeyValuePair* to_host();
+		//__host__ static void to_string(const KeyValuePair* kv, char* s);
 
-		__host__ __device__ void test();
-		char* key;
-		char* value;
-		bool is_device;
+		//__host__ __device__ void test();
+		char key[100];
+		char value[100];
+		//bool is_device;
 };
 
 //struct KeyValuePair {
