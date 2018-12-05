@@ -59,8 +59,31 @@ KeyValuePair* KeyValuePair::to_device() {
 	tmp_kv.value = dev_v;
 	tmp_kv.is_device = 1; //It is a device obj now!
 	cudaMemcpy(dev_kv, &tmp_kv, sizeof(KeyValuePair), cudaMemcpyHostToDevice);
-
 	return dev_kv;
+}
+
+void KeyValuePair::test() {
+	printf("test \n");
+}
+
+KeyValuePair* KeyValuePair::to_host() {
+	printf("%d", 11111);
+	char* host_k = NULL;	
+	host_k = (char*)malloc(sizeof(char) * strlen(key));
+	cudaMemcpy(host_k, key, sizeof(char) * strlen(key), cudaMemcpyDeviceToHost);
+	char *host_v = NULL;
+	host_v = (char*)malloc(sizeof(char) * strlen(value));
+	cudaMemcpy(host_v, value, sizeof(char) * strlen(value), cudaMemcpyDeviceToHost);
+
+	KeyValuePair* host_kv = NULL;
+	host_kv = (KeyValuePair*)malloc(sizeof(KeyValuePair));
+	KeyValuePair tmp_kv = KeyValuePair();
+	tmp_kv.key = host_k;
+	tmp_kv.value = host_v;
+	tmp_kv.is_device = 0;
+	cudaMemcpy(host_kv, &tmp_kv, sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
+
+	return host_kv;
 }
 
 void KeyValuePair::to_string(const KeyValuePair* kv, char* s) {

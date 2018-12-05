@@ -19,9 +19,9 @@
 
 #define WINDOWS 0
 #define LINUX 1
-#define COMPILE_OS LINUX
+#define COMPILE_OS WINDOWS
 
-__host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
+__host__ void loadFile(char fname[], KeyValuePair* kvs, int* length) {
 #if COMPILE_OS == WINDOWS
 	std::ifstream input(fname);
 	int line_num = 0;
@@ -29,7 +29,7 @@ __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 	{
 		char *cstr = new char[line.length() + 1];
 		strcpy(cstr, line.c_str());
-		kvs[line_num] = new KeyValuePair(line_num, cstr);
+		kvs[line_num] = KeyValuePair(line_num, cstr);
 		line_num++;
 		delete[] cstr;
 	}
@@ -54,45 +54,61 @@ __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 #endif
 }
 
-__host__ __device__ void printKeyValues(KeyValuePair** kvs, int length) {
+__host__ __device__ void printKeyValues(KeyValuePair* kvs, int length) {
 	for(int i = 0; i < length; i++) {
-		if (kvs[i] == NULL) {
-			//printf("[%i = null]\n", i);
+		if (kvs[i].key == NULL) {
+			printf("[%i = null]\n", i);
 		} else {
-			printf("%s \t %s\n", kvs[i]->key, kvs[i]->value);
+			printf("%s \t %s\n", kvs[i].key, kvs[i].value);
 		}
 	}
 }
 
 __host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
-	out[n] = new KeyValuePair(kv);
+	//out[n] = new KeyValuePair(kv);
+	
 }
 
-__host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n, bool is_device) {
+__host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int n, bool is_device) {
 	char* tokens = my_strtok(kv.value, " ,.-\t");
 	int i = 0;
+
 	while (tokens != NULL) {
 		if (i >= EMITS_PER_LINE) {
 			printf("WARN: Exceeded emit limit\n");
 			return;
 		}
-		emit(KeyValuePair(tokens, "1", is_device), out, n + i);
+		printf("Reading input key: %s, %s\n", kv.key, kv.value);
+		
+		KeyValuePair* curOut = &out[n + i];
+		
+		curOut = new KeyValuePair(tokens, "1", is_device);
+		printf("caonima");		
+		//curOut->key = tokens;
+		//curOut->value = "1";
+		//curOut->is_device = is_device;
+		//emit(KeyValuePair(tokens, "1", is_device), out, n + i);
+		
 		tokens = my_strtok(NULL, " ,.-\t");
 		i++;
 	}
+	
+	
 }
 
-__host__ void cpuMap(KeyValuePair** in, KeyValuePair** out, int length) {
+__host__ void cpuMap(KeyValuePair* in, KeyValuePair* out, int length) {
 	for (int i = 0; i < length; i++) {
-		map(*in[i], out, i * EMITS_PER_LINE, 0);
+		map(in[i], out, i * EMITS_PER_LINE, 0);
 	}
 }
 
-__global__ void kernMap(KeyValuePair** in, KeyValuePair** out, int length) {
+__global__ void kernMap(KeyValuePair* in, KeyValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
-	//printf("Reading input key: %s, %s", in[i]->key, in[i]->value);
-	map(*in[i], out, i * EMITS_PER_LINE, 1);
+	printf("%d", i);
+	printf("Reading input key: %s, %s\n", in[0].key, in[0].value);
+	map(in[i], out, i * EMITS_PER_LINE, 1);
+	
 }
 
 __host__ void reduce(int start, int end, KeyValuePair** in, KeyValuePair** out, int n) {
@@ -127,7 +143,7 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 // dev_array will be newly allocated and the pointer returned
 __host__ KeyValuePair** copyKVPairToCuda(KeyValuePair** host_array, int length) {
 	// Step 1: Create host array of device pointers
-	KeyValuePair* host_of_device[length] = { NULL };
+	KeyValuePair* host_of_device[MAX_LINES_FILE_READ] = { NULL };
 	int i = 0;
 	while (host_array[i] != NULL && i < length) {
 		host_of_device[i] = host_array[i]->to_device();
@@ -139,8 +155,28 @@ __host__ KeyValuePair** copyKVPairToCuda(KeyValuePair** host_array, int length) 
 	int sz = sizeof(KeyValuePair**) * length;
 	cudaMalloc(&dev_kvs, sz);
 	cudaMemcpy(dev_kvs, host_of_device, sz, cudaMemcpyHostToDevice);
-
 	return dev_kvs;
+}
+
+__host__ __device__ KeyValuePair** copyKVPairFromCuda(KeyValuePair** dev_array, int length) {
+	// Step 1: Create device array of host pointers
+	
+	KeyValuePair* device_of_host[MAX_EMITS] = { NULL };
+	int i = 0;
+	while (i < length) {
+		printf("%d \n", i);
+		dev_array[i]->test();
+		printf("%d \n", i);
+		//device_of_host[i] = dev_array[i]->to_host();
+		i++;
+	}
+	
+	// Step 2: Move device array to host
+	KeyValuePair** host_kvs;
+	int sz = sizeof(KeyValuePair**) * length;
+	host_kvs = (KeyValuePair**)malloc(sz);
+	cudaMemcpy(host_kvs, device_of_host, sz, cudaMemcpyDeviceToHost);
+	return host_kvs;
 }
 
 __host__ int main(int argc, char* argv[]) {
@@ -149,13 +185,13 @@ __host__ int main(int argc, char* argv[]) {
 	std::cout << "Running\n";
 	// Load file
 	int length = 0;
-	KeyValuePair* file_kvs[MAX_LINES_FILE_READ] = {NULL};
-	loadFile("../LICENSE", file_kvs, &length);
-	//printf("Length: %i\n", length);
-	//printKeyValues(kvs, length);
+	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = {NULL};
+	loadFile("LICENSE", file_kvs, &length);
+	printf("Length: %i\n", length);
+	//printKeyValues(file_kvs, length);
 
 	// Map stage
-	KeyValuePair* map_kvs[MAX_EMITS] = {NULL};
+	//KeyValuePair* map_kvs[MAX_EMITS] = {NULL};
 	
 	//printKeyValues(map_kvs, MAX_EMITS);
 
@@ -163,25 +199,48 @@ __host__ int main(int argc, char* argv[]) {
 	//TODO
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
-	KeyValuePair** dev_file_kvs = copyKVPairToCuda(file_kvs, MAX_LINES_FILE_READ);
+	KeyValuePair* dev_file_kvs = NULL;
+	cudaMalloc(&dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair));
+	cudaMemcpy(dev_file_kvs, file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair), cudaMemcpyHostToDevice);
 
-	KeyValuePair* null_array[MAX_EMITS] = { NULL };
+	KeyValuePair* dev_map_kvs = NULL;
+	cudaMalloc(&dev_map_kvs, MAX_EMITS * sizeof(KeyValuePair));
+	//kernMap << <1024, 1024 >> > (dev_file_kvs, dev_map_kvs, length);
 
-	KeyValuePair** dev_map_kvs;
-	int sz = MAX_EMITS * sizeof(KeyValuePair*);
-	cudaMalloc(&dev_map_kvs, sz);
-	cudaMemcpy(dev_map_kvs, null_array, sz, cudaMemcpyHostToDevice);
-	auto t0 = Clock::now();
-	kernMap << <1024, 1024 >> > (dev_file_kvs, dev_map_kvs, length);
-	auto t1 = Clock::now();
-	printf("%d nanoseconds \n", t1 - t0);
+	//KeyValuePair* map_kvs = NULL;
+	//map_kvs = (KeyValuePair*)malloc(MAX_EMITS * sizeof(KeyValuePair));
+	//cudaMemcpy(map_kvs, dev_map_kvs, MAX_EMITS * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
+	//printKeyValues(map_kvs, MAX_EMITS);
+
+	KeyValuePair* test_file_kvs = NULL;
+	test_file_kvs = (KeyValuePair*)malloc(MAX_LINES_FILE_READ * sizeof(KeyValuePair));
+	cudaMemcpy(test_file_kvs, dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
+	printKeyValues(test_file_kvs, MAX_LINES_FILE_READ);
+
+
+	//KeyValuePair* null_array[MAX_EMITS];
+	//for (int i = 0; i < MAX_EMITS; i++) {
+	//	null_array[i] = new KeyValuePair(1);
+	//}
+ 
+	//KeyValuePair** dev_map_kvs;
+	//int sz = MAX_EMITS * sizeof(KeyValuePair*);
+	//cudaMalloc(&dev_map_kvs, sz);
+	//cudaMemcpy(dev_map_kvs, null_array, sz, cudaMemcpyHostToDevice);
+	//auto t0 = Clock::now();
+	//kernMap << <1024, 1024 >> > (dev_file_kvs, dev_map_kvs, length);
+	//auto t1 = Clock::now();
+	//printf("%d nanoseconds \n", t1 - t0);
+
+	//KeyValuePair** host_map_kvs = copyKVPairFromCuda(dev_map_kvs, MAX_EMITS);
+	//printKeyValues(host_map_kvs, length);
 	//thrust::device_ptr<KeyValuePair*> dev_ptr(dev_map_kvs);
 	//thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
 	// Can't print these, it's mapped to device ptrs
 	//printKeyValues(dev_map_kvs, length);
 	// TODO: This doesn't free the actual KV objects, just the arrays.
 	cudaFree(dev_file_kvs);
-	cudaFree(dev_map_kvs);
+	//cudaFree(dev_map_kvs);
 	//*/
 	
 #else
