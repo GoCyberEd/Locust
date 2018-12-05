@@ -1,6 +1,7 @@
 #pragma once
 #include <cuda_runtime.h>
 #include "device_launch_parameters.h"
+#include "util.h"
 
 struct KeyValuePair {
 	public:
@@ -27,10 +28,7 @@ struct KeyValuePair {
 
 class KVComparator {
 public:
-	__host__ __device__ bool operator() (const KeyValuePair *kv1, const KeyValuePair *kv2);
-	/*
-	__host__ __device__ bool operator() (const KeyValuePair &kv1, const KeyValuePair &kv2) {
-		// The signatures are different, we need to sort an array of pointers, not an array of values
+	__host__ __device__ bool operator() (const KeyValuePair& kv1, const KeyValuePair& kv2) {
 		unsigned char *temp1 = (unsigned char *) &(kv1.key);
 		unsigned char *temp2 = (unsigned char *) &(kv2.key);
 		while (*temp1 && *temp2) {
@@ -49,5 +47,11 @@ public:
 		}
 		return false;
 	}
-	*/
+};
+
+class KeyValueNotEmpty {
+public:
+	__host__ __device__ bool operator()(const KeyValuePair& kvp) {
+		return my_strlen(kvp.key) > 0;
+	}
 };
