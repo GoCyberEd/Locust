@@ -17,7 +17,7 @@
 #define MAX_LINES_FILE_READ 1024
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
-#define GPU_IMPLEMENTATION 1
+#define GPU_IMPLEMENTATION 0
 
 #define WINDOWS 0
 #define LINUX 1
@@ -149,12 +149,16 @@ __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 #if COMPILE_OS == WINDOWS
 	std::ifstream input(fname);
 	int line_num = 0;
+
 	for (std::string line; getline(input, line); )
 	{
+		
 		char *cstr = new char[line.length() + 1];
 		my_strcpy(cstr, line.c_str());
-		itoa(line_num, kvs[line_num]->key, 10);
-		my_strcpy(kvs[line_num]->value, cstr);
+		KeyValuePair* curkvs = kvs[line_num];
+		printf("gannimabi \n");
+		//itoa(line_num, curkvs->key, 10);
+		//my_strcpy(curkvs->value, cstr);
 		line_num++;
 		delete[] cstr;
 	}
@@ -260,7 +264,6 @@ __host__ int main(int argc, char* argv[]) {
 	typedef std::chrono::high_resolution_clock Clock;
 
 	std::cout << "Running\n";
-	//TODO
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
@@ -320,7 +323,6 @@ __host__ int main(int argc, char* argv[]) {
 	int length = 0;
 	KeyValuePair* file_kvs[MAX_LINES_FILE_READ] = { NULL };
 	loadFile("LICENSE", file_kvs, &length);
-
 	KeyValuePair* map_kvs[MAX_EMITS] = { NULL };
 	auto t0 = Clock::now();
 	cpuMap(file_kvs, map_kvs, length);
@@ -342,7 +344,6 @@ __host__ int main(int argc, char* argv[]) {
 
 	//std::sort(map_kvs, map_kvs + MAX_EMITS, KVComparator());
 
-	//printf("caonima\n");
 	//// Reduce stage
 	//KeyValuePair* reduce_kvs = NULL;
 	//reduce_kvs = (KeyValuePair*)malloc(MAX_EMITS * sizeof(KeyValuePair));
