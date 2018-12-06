@@ -22,6 +22,13 @@ struct KeyValuePair {
 		//bool is_device;
 };
 
+struct KeyIntValuePair {
+public:
+	char key[30];
+	int value;
+	int count;
+};
+
 //struct KeyValuePair {
 //	char* key;
 //	char* value;
@@ -39,27 +46,41 @@ public:
 			}
 			i++;
 		}
-		//while (*temp1 && *temp2) {
-		//	if (*temp1 == *temp2) {
-		//		temp1++;
-		//		temp2++;
-		//	}
-		//	else {
-		//		if (*temp1 < *temp2) {
-		//			return false;
-		//		}
-		//		else {
-		//			return true;
-		//		}
-		//	}
-		//}
-		//return false;
 	}
 };
+
+class KVComparatorCPU {
+public:
+	__host__ __device__ bool operator() (const KeyValuePair *kv1, const KeyValuePair *kv2) {
+		if (!kv1 || !kv1->key) {
+			return false;
+		}
+		else if (!kv2 || !kv2->key) {
+			return true;
+		}
+
+		int i = 0;
+		while (1) {
+			if (kv1->key[i] != kv2->key[i]) {
+				return kv1->key[i] < kv2->key[i];
+			}
+			i++;
+		}
+	}
+};
+
+
 
 class KeyValueNotEmpty {
 public:
 	__host__ __device__ bool operator()(const KeyValuePair& kvp) {
+		return my_strlen(kvp.key) > 0;
+	}
+};
+
+class KeyIntValueNotEmpty {
+public:
+	__host__ __device__ bool operator()(const KeyIntValuePair& kvp) {
 		return my_strlen(kvp.key) > 0;
 	}
 };
