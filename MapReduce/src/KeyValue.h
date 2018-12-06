@@ -18,6 +18,7 @@ struct KeyValuePair {
 		//__host__ __device__ void test();
 		char key[100];
 		char value[100];
+		int ind;
 		//bool is_device;
 };
 
