@@ -89,7 +89,7 @@ __host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int i, bool is_
 	//	i++;
 	//}
 	char* pSave = NULL;
-	char* tokens = my_strtok_r(kv.value, " ,.-\t", &pSave);
+	char* tokens = my_strtok_r(kv.value, " ,.-;:'()\"\t", &pSave);
 	int count = 0;
 
 	while (tokens != NULL) {
@@ -101,7 +101,7 @@ __host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int i, bool is_
 		my_strcpy(curOut->key, tokens);
 		my_strcpy(curOut->value, "1");
 		//printf("out [%d][%d] key: %s, value: %s \n", i, count, curOut->key, curOut->value);
-		tokens = my_strtok_r(NULL, " ,.-\t", &pSave);
+		tokens = my_strtok_r(NULL, " ,.-;:'()\"\t", &pSave);
 		count++;
 	}
 	
@@ -120,6 +120,12 @@ __global__ void kernMap(KeyValuePair* in, KeyValuePair* out, int length) {
 	//printf("kernMap input key: %s, value: %s\n", in[i].key, in[i].value);
 	map(in[i], out, i, 1);
 	//printf("kernMap output key: %s, value: %s\n", out[i].key, out[i].value);
+}
+
+__global__ void kernReduce(KeyValuePair* in, KeyValuePair* out, int length) {
+	int i = blockIdx.x * blockDim.x + threadIdx.x;
+	if (i >= length) return;
+
 }
 
 __host__ void reduce(int start, int end, KeyValuePair** in, KeyValuePair** out, int n) {
@@ -243,47 +249,16 @@ __host__ int main(int argc, char* argv[]) {
 	printf("Remain kv number is %d \n", kv_num);
 	thrust::device_ptr<KeyValuePair> dev_ptr(dev_map_kvs);
 	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num, KVComparator());
-	
-
 
 	KeyValuePair* map_kvs = NULL;
 	map_kvs = (KeyValuePair*)malloc(kv_num * sizeof(KeyValuePair));
 	cudaMemcpy(map_kvs, dev_map_kvs, kv_num * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
 	printKeyValues(map_kvs, kv_num);
 
-	//KeyValuePair* test_file_kvs = NULL;
-	//test_file_kvs = (KeyValuePair*)malloc(MAX_LINES_FILE_READ * sizeof(KeyValuePair));
-	//cudaMemcpy(test_file_kvs, dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
-	//printKeyValues(test_file_kvs, MAX_LINES_FILE_READ);
-	//free(test_file_kvs);
-
 	free(map_kvs);
 	cudaFree(dev_file_kvs);
 	cudaFree(dev_map_kvs);
-	//KeyValuePair* null_array[MAX_EMITS];
-	//for (int i = 0; i < MAX_EMITS; i++) {
-	//	null_array[i] = new KeyValuePair(1);
-	//}
  
-	//KeyValuePair** dev_map_kvs;
-	//int sz = MAX_EMITS * sizeof(KeyValuePair*);
-	//cudaMalloc(&dev_map_kvs, sz);
-	//cudaMemcpy(dev_map_kvs, null_array, sz, cudaMemcpyHostToDevice);
-	//auto t0 = Clock::now();
-	//kernMap << <1024, 1024 >> > (dev_file_kvs, dev_map_kvs, length);
-	//auto t1 = Clock::now();
-	//printf("%d nanoseconds \n", t1 - t0);
-
-	//KeyValuePair** host_map_kvs = copyKVPairFromCuda(dev_map_kvs, MAX_EMITS);
-	//printKeyValues(host_map_kvs, length);
-	//thrust::device_ptr<KeyValuePair*> dev_ptr(dev_map_kvs);
-	//thrust::sort(dev_ptr, dev_ptr + MAX_EMITS, KVComparator());
-	// Can't print these, it's mapped to device ptrs
-	//printKeyValues(dev_map_kvs, length);
-	// TODO: This doesn't free the actual KV objects, just the arrays.
-	//cudaFree(dev_file_kvs);
-	//cudaFree(dev_map_kvs);
-	//*/
 	
 #else
 	auto t0 = Clock::now();

@@ -31,21 +31,28 @@ public:
 	__host__ __device__ bool operator() (const KeyValuePair& kv1, const KeyValuePair& kv2) {
 		unsigned char *temp1 = (unsigned char *) &(kv1.key);
 		unsigned char *temp2 = (unsigned char *) &(kv2.key);
-		while (*temp1 && *temp2) {
-			if (*temp1 == *temp2) {
-				temp1++;
-				temp2++;
+		int i = 0;
+		while (1) {
+			if (temp1[i] != temp2[i]) {
+				return temp1[i] < temp2[i];
 			}
-			else {
-				if (*temp1 < *temp2) {
-					return false;
-				}
-				else {
-					return true;
-				}
-			}
+			i++;
 		}
-		return false;
+		//while (*temp1 && *temp2) {
+		//	if (*temp1 == *temp2) {
+		//		temp1++;
+		//		temp2++;
+		//	}
+		//	else {
+		//		if (*temp1 < *temp2) {
+		//			return false;
+		//		}
+		//		else {
+		//			return true;
+		//		}
+		//	}
+		//}
+		//return false;
 	}
 };
 
