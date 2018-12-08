@@ -154,11 +154,11 @@ __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
 	{
 		
 		char *cstr = new char[line.length() + 1];
-		my_strcpy(cstr, line.c_str());
-		KeyValuePair* curkvs = kvs[line_num];
-		printf("gannimabi \n");
-		//itoa(line_num, curkvs->key, 10);
-		//my_strcpy(curkvs->value, cstr);
+		strcpy(cstr, line.c_str());
+		kvs[line_num] = new KeyValuePair();
+		KeyValuePair* curkvs = kvs[line_num];		
+		my_itoa(line_num, curkvs->key, 10);
+		my_strcpy(curkvs->value, cstr);
 		line_num++;
 		delete[] cstr;
 	}
@@ -189,7 +189,7 @@ __host__ __device__ void printKeyValues(KeyValuePair** kvs, int length) {
 			//printf("[%i = null]\n", i);
 		}
 		else {
-			printf("%s \t %s\n", kvs[i]->key, kvs[i]->value);
+			printf("print key: %s \t value: %s\n", kvs[i]->key, kvs[i]->value);
 		}
 	}
 }
@@ -199,24 +199,26 @@ __host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
 }
 
 __host__ __device__ void map(KeyValuePair kv, KeyValuePair** out, int n, bool is_device) {
-	char* tokens = my_strtok(kv.value, " ,.-\t");
+	char* pSave = NULL;
+	char* tokens = my_strtok_r(kv.value, " ,.-;:'()\"\t", &pSave);
 	int i = 0;
 	while (tokens != NULL) {
 		if (i >= EMITS_PER_LINE) {
 			printf("WARN: Exceeded emit limit\n");
 			return;
 		}
+		out[n * EMITS_PER_LINE + i] = new KeyValuePair();
 		KeyValuePair* curOut = out[n * EMITS_PER_LINE + i];
 		my_strcpy(curOut->key, tokens);
 		my_strcpy(curOut->value, "1");
-		tokens = my_strtok(NULL, " ,.-\t");
+		tokens = my_strtok_r(NULL, " ,.-;:'()\"\t", &pSave);
 		i++;
 	}
 }
 
 __host__ void cpuMap(KeyValuePair** in, KeyValuePair** out, int length) {
 	for (int i = 0; i < length; i++) {
-		map(*in[i], out, i * EMITS_PER_LINE, 0);
+		map(*in[i], out, i, 0);
 	}
 }
 
@@ -231,6 +233,7 @@ __host__ void reduce(int start, int end, KeyValuePair** in, KeyValuePair** out, 
 	char* key = in[start]->key;
 	char value[50];
 	sprintf(value, "%i", end - start);
+	out[n] = new KeyValuePair();
 	KeyValuePair* curOut = out[n];
 	my_strcpy(curOut->key, key);
 	my_strcpy(curOut->value, value);
@@ -268,7 +271,7 @@ __host__ int main(int argc, char* argv[]) {
 	// Sort filtered map output
 	int length = 0;
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile("LICENSE", file_kvs, &length);
+	loadFile("LICENSE.txt", file_kvs, &length);
 	printf("Length: %i\n", length);
 
 	KeyValuePair* dev_file_kvs = NULL;

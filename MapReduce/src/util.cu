@@ -1,4 +1,5 @@
 #include <cuda_runtime.h>
+#include "util.h"
 __host__ __device__ int my_strlen(const char * str) {
 	const char *s;
 	for (s = str; *s; ++s) {
@@ -7,7 +8,7 @@ __host__ __device__ int my_strlen(const char * str) {
 	return s - str;
 }
 
-__host__ __device__ int my_strcmp(const char *str_a, const char *str_b, unsigned len = 256) {
+__host__ __device__ int my_strcmp(const char *str_a, const char *str_b, unsigned len) {
 	for (int i = 0; ; i++) {
 		if (str_a[i] != str_b[i]) {
 			return str_a[i] < str_b[i] ? -1 : 1;
@@ -26,7 +27,7 @@ __host__ __device__ char * my_strcpy(char *strDest, const char *strSrc)
 }
 
 __host__ __device__ char* my_strtok(char *str, const char* delim) {
-	char* buffer;
+	static char* buffer;
 	if (str != NULL) buffer = str;
 	if (buffer[0] == '\0') return NULL;
 
@@ -104,26 +105,23 @@ __host__ __device__ void my_reverse(char str[], int length)
 
 __host__ __device__ char* my_itoa(int num, char* str, int base)
 {
+
 	int i = 0;
 	bool isNegative = false;
 
-	/* Handle 0 explicitely, otherwise empty string is printed for 0 */
 	if (num == 0)
 	{
 		str[i++] = '0';
 		str[i] = '\0';
 		return str;
 	}
-
-	// In standard itoa(), negative numbers are handled only with  
-	// base 10. Otherwise numbers are considered unsigned. 
+	
 	if (num < 0 && base == 10)
 	{
 		isNegative = true;
 		num = -num;
 	}
 
-	// Process individual digits 
 	while (num != 0)
 	{
 		int rem = num % base;
@@ -131,13 +129,11 @@ __host__ __device__ char* my_itoa(int num, char* str, int base)
 		num = num / base;
 	}
 
-	// If number is negative, append '-' 
 	if (isNegative)
 		str[i++] = '-';
 
-	str[i] = '\0'; // Append string terminator 
+	str[i] = '\0'; 
 
-				   // Reverse the string 
 	my_reverse(str, i);
 
 	return str;

@@ -1,5 +1,6 @@
 #pragma once
 #include <cuda_runtime.h>
+#include <stdio.h>
 
 __host__ __device__ int my_strlen(const char * str);
 __host__ __device__ int my_strcmp(const char *str_a, const char *str_b, unsigned len = 256);
