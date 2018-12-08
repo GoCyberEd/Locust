@@ -13,8 +13,23 @@ struct KeyValuePair {
 struct KeyIntValuePair {
 public:
 	char key[30];
-	int value;
-	int count;
+	int value = 0;
+	int count = 0;
+};
+
+class KIVComparator {
+public:
+	__host__ __device__ bool operator() (const KeyIntValuePair& kv1, const KeyIntValuePair& kv2) {
+		unsigned char *temp1 = (unsigned char *) &(kv1.key);
+		unsigned char *temp2 = (unsigned char *) &(kv2.key);
+		int i = 0;
+		while (1) {
+			if (temp1[i] != temp2[i]) {
+				return temp1[i] < temp2[i];
+			}
+			i++;
+		}
+	}
 };
 
 class KVComparator {
@@ -65,5 +80,12 @@ class KeyIntValueNotEmpty {
 public:
 	__host__ __device__ bool operator()(const KeyIntValuePair& kvp) {
 		return my_strlen(kvp.key) > 0;
+	}
+};
+
+class KeyIntValueZero {
+public:
+	__host__ __device__ bool operator()(const KeyIntValuePair& kvp) {
+		return kvp.value == 0;
 	}
 };

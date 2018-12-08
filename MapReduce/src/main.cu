@@ -62,7 +62,7 @@ __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length) {
 __host__ __device__ void printKeyValues(KeyValuePair* kvs, int length) {
 	for(int i = 0; i < length; i++) {
 		if (my_strlen(kvs[i].key) == 0) {
-			printf("[%i = null]\n", i);
+			//printf("[%i = null]\n", i);
 		} else {
 			printf("print key: %s \t value: %s\n", kvs[i].key, kvs[i].value);
 		}
@@ -72,7 +72,7 @@ __host__ __device__ void printKeyValues(KeyValuePair* kvs, int length) {
 __host__ __device__ void printKeyIntValues(KeyIntValuePair* kvs, int length) {
 	for (int i = 0; i < length; i++) {
 		if (my_strlen(kvs[i].key) == 0) {
-			printf("[%i = null]\n", i);
+			//printf("[%i = null]\n", i);
 		}
 		else {
 			printf("print key: %s \t count: %d\n", kvs[i].key, kvs[i].count);
@@ -85,10 +85,7 @@ __host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
 	
 }
 
-__host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int i, bool is_device) {
-	if (my_strlen(kv.value) == 0) {
-		return;
-	}
+__host__ __device__ void map(KeyValuePair kv, KeyIntValuePair* out, int i, bool is_device) {
 	char* pSave = NULL;
 	char* tokens = my_strtok_r(kv.value, " ,.-;:'()\"\t", &pSave);
 	int count = 0;
@@ -97,28 +94,23 @@ __host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int i, bool is_
 			printf("WARN: Exceeded emit limit\n");
 			break;
 		}
-		KeyValuePair* curOut = &out[i * EMITS_PER_LINE + count];
+		KeyIntValuePair* curOut = &out[i * EMITS_PER_LINE + count];
 		my_strcpy(curOut->key, tokens);
-		my_strcpy(curOut->value, "1");
+		curOut->value = 1;
+		//my_strcpy(curOut->value, "1");
 		//printf("out [%d][%d] key: %s, value: %s \n", i, count, curOut->key, curOut->value);
 		tokens = my_strtok_r(NULL, " ,.-;:'()\"\t", &pSave);
 		count++;
 	}
 }
 
-__host__ void cpuMap(KeyValuePair* in, KeyValuePair** out, int length) {
-	for (int i = 0; i < length; i++) {
-		map(in[i], out[i], i, 0);
-	}
-}
-
-__global__ void kernMap(KeyValuePair* in, KeyValuePair* out, int length) {
+__global__ void kernMap(KeyValuePair* in, KeyIntValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
 	map(in[i], out, i, 1);
 }
 
-__global__ void kernFindUniqBool(KeyValuePair* in, KeyIntValuePair* out, int length) {
+__global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
 	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
@@ -126,9 +118,17 @@ __global__ void kernFindUniqBool(KeyValuePair* in, KeyIntValuePair* out, int len
 		//char* value;
 		//my_itoa(i, value, 10);
 		my_strcpy(curOut->key, in[i].key);
+		//printf("curOut->key is %s \n", curOut->key);
 		curOut->value = i;
+		curOut->count = 0;
+		//printf("curOut->value is %d \n", curOut->value);
 		//my_strcpy(curOut->value, value);
 		return;
+	}
+	else {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, "");
+		curOut->value = 0;
 	}
 }
 
@@ -278,8 +278,8 @@ __host__ int main(int argc, char* argv[]) {
 	cudaMalloc((void **)&dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair));
 	cudaMemcpy(dev_file_kvs, file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair), cudaMemcpyHostToDevice);
 
-	KeyValuePair* dev_map_kvs = NULL;
-	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyValuePair));
+	KeyIntValuePair* dev_map_kvs = NULL;
+	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
 
 	auto t0 = Clock::now();
 	kernMap << <128, 128 >> > (dev_file_kvs, dev_map_kvs, length);
@@ -287,19 +287,20 @@ __host__ int main(int argc, char* argv[]) {
 	printf("GPU mapping %d nanoseconds \n", t1 - t0);
 
 	// stream compaction
-	KeyValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyValueNotEmpty());
+	KeyIntValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyIntValueNotEmpty());
 	int kv_num_map = iter_end - dev_map_kvs;
 	printf("Remain kv number is %d \n", kv_num_map);
-	thrust::device_ptr<KeyValuePair> dev_ptr(dev_map_kvs);
-	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num_map, KVComparator());
+	thrust::device_ptr<KeyIntValuePair> dev_ptr(dev_map_kvs);
+	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num_map, KIVComparator());
 
 	auto t2 = Clock::now();
 	printf("GPU stream compaction and sorting %d nanoseconds \n", t2 - t1);
 
-	KeyValuePair* map_kvs = NULL;
-	map_kvs = (KeyValuePair*)malloc(kv_num_map * sizeof(KeyValuePair));
-	cudaMemcpy(map_kvs, dev_map_kvs, kv_num_map * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
-	//printKeyValues(map_kvs, kv_num_map);
+
+	//KeyIntValuePair* map_kvs = NULL;
+	//map_kvs = (KeyIntValuePair*)malloc(kv_num_map * sizeof(KeyIntValuePair));
+	//cudaMemcpy(map_kvs, dev_map_kvs, kv_num_map * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+	//printKeyIntValues(map_kvs, kv_num_map);
 
 	//bool* bool_array = NULL;
 	//cudaMalloc((void **)&bool_array, kv_num * sizeof(bool));
@@ -307,9 +308,18 @@ __host__ int main(int argc, char* argv[]) {
 
 	KeyIntValuePair* dev_reduce_kvs = NULL;
 	cudaMalloc((void **)&dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair));
+
+
 	
 	auto t3 = Clock::now();
 	kernFindUniqBool << <128, 128 >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
+
+
+	//KeyIntValuePair* reduce_kvs = NULL;
+	//reduce_kvs = (KeyIntValuePair*)malloc(kv_num_map * sizeof(KeyIntValuePair));
+	//cudaMemcpy(reduce_kvs, dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+	//printKeyIntValues(reduce_kvs, kv_num_map);
+
 	KeyIntValuePair* iter_end_reduce = thrust::partition(thrust::device, dev_reduce_kvs, dev_reduce_kvs + kv_num_map, KeyIntValueNotEmpty());
 	int kv_num_reduce = iter_end_reduce - dev_reduce_kvs;
 
@@ -323,7 +333,7 @@ __host__ int main(int argc, char* argv[]) {
 	cudaMemcpy(reduce_kvs, dev_reduce_kvs, kv_num_reduce * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
 	printKeyIntValues(reduce_kvs, kv_num_reduce);
 
-	free(map_kvs);
+	//free(map_kvs);
 
 	cudaFree(dev_file_kvs);
 	cudaFree(dev_map_kvs);
@@ -349,7 +359,7 @@ __host__ int main(int argc, char* argv[]) {
 	auto t3 = Clock::now();
 	cpuReduce(map_kvs, reduce_kvs, MAX_EMITS);
 	auto t4 = Clock::now();
-	printf("CPU sorting %d nanoseconds \n", t4 - t3);
+	printf("CPU reducing %d nanoseconds \n", t4 - t3);
 	std::sort(reduce_kvs, reduce_kvs + MAX_EMITS, KVComparatorCPU());
 	printKeyValues(reduce_kvs, MAX_EMITS);
 	//KeyValuePair* map_kvs = NULL;
