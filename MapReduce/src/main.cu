@@ -18,6 +18,10 @@
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
 #define GPU_IMPLEMENTATION 1
+#define SHARE_MEMORY 1
+
+#define GRID_SIZE 128
+#define BLOCK_SIZE 256
 
 #define WINDOWS 0
 #define LINUX 1
@@ -78,11 +82,6 @@ __host__ __device__ void printKeyIntValues(KeyIntValuePair* kvs, int length) {
 			printf("print key: %s \t count: %d\n", kvs[i].key, kvs[i].count);
 		}
 	}
-}
-
-__host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
-	//out[n] = new KeyValuePair(kv);
-	
 }
 
 __host__ __device__ void map(KeyValuePair kv, KeyIntValuePair* out, int i, bool is_device) {
@@ -283,7 +282,7 @@ __host__ int main(int argc, char* argv[]) {
 	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
 
 	auto t0 = Clock::now();
-	kernMap << <128, 256 >> > (dev_file_kvs, dev_map_kvs, length);
+	kernMap << <GRID_SIZE, BLOCK_SIZE >> > (dev_file_kvs, dev_map_kvs, length);
 	auto t1 = Clock::now();
 	printf("GPU mapping %d nanoseconds \n", t1 - t0);
 
@@ -313,7 +312,7 @@ __host__ int main(int argc, char* argv[]) {
 
 	
 	auto t3 = Clock::now();
-	kernFindUniqBool << <128, 256 >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
+	kernFindUniqBool << <GRID_SIZE, BLOCK_SIZE >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
 
 
 	//KeyIntValuePair* reduce_kvs = NULL;
@@ -324,7 +323,7 @@ __host__ int main(int argc, char* argv[]) {
 	KeyIntValuePair* iter_end_reduce = thrust::partition(thrust::device, dev_reduce_kvs, dev_reduce_kvs + kv_num_map, KeyIntValueNotEmpty());
 	int kv_num_reduce = iter_end_reduce - dev_reduce_kvs;
 
-	kernGetCount << <128, 256 >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
+	kernGetCount << <GRID_SIZE, BLOCK_SIZE >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
 
 	auto t4 = Clock::now();
 	printf("GPU reduce %d nanoseconds \n", t4 - t3);
