@@ -14,7 +14,7 @@
 #include "util.h"
 #include "KeyValue.h"
 
-#define MAX_LINES_FILE_READ 4500
+#define MAX_LINES_FILE_READ 5800
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
 #define GPU_IMPLEMENTATION 1
@@ -138,6 +138,11 @@ __global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int 
 		curOut->value = i;
 		curOut->count = 0;
 		return;
+	}
+	else {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, "");
+		curOut->value = 0;
 	}
 #else
 	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
@@ -309,7 +314,7 @@ __host__ int main(int argc, char* argv[]) {
 	typedef std::chrono::high_resolution_clock Clock;
 
 	std::cout << "Running\n";
-	char* filename = "hamlet.txt";
+	char* filename = "vgilante.txt";
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
