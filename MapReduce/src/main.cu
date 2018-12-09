@@ -23,6 +23,8 @@
 #define GRID_SIZE 128
 #define BLOCK_SIZE 256
 
+#define SHARED_MEMORY_SIZE 32
+
 #define WINDOWS 0
 #define LINUX 1
 #define COMPILE_OS WINDOWS
@@ -112,16 +114,37 @@ __global__ void kernMap(KeyValuePair* in, KeyIntValuePair* out, int length) {
 __global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
-	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
+#if SHARE_MEMORY
+	if (i == 0) {
 		KeyIntValuePair* curOut = &out[i];
-		//char* value;
-		//my_itoa(i, value, 10);
 		my_strcpy(curOut->key, in[i].key);
-		//printf("curOut->key is %s \n", curOut->key);
 		curOut->value = i;
 		curOut->count = 0;
-		//printf("curOut->value is %d \n", curOut->value);
-		//my_strcpy(curOut->value, value);
+		return;
+	}
+	__shared__ KeyIntValuePair shared_kvs[BLOCK_SIZE];
+	shared_kvs[i % BLOCK_SIZE] = in[i];
+	__syncthreads();
+	if (i % BLOCK_SIZE != 0 && my_strcmp(shared_kvs[i % BLOCK_SIZE - 1].key, shared_kvs[i % BLOCK_SIZE].key)) {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, in[i].key);
+		curOut->value = i;
+		curOut->count = 0;
+		return;
+	}
+	else if (i % BLOCK_SIZE == 0 && my_strcmp(in[i].key, in[i - 1].key)) {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, in[i].key);
+		curOut->value = i;
+		curOut->count = 0;
+		return;
+	}
+#else
+	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, in[i].key);
+		curOut->value = i;
+		curOut->count = 0;
 		return;
 	}
 	else {
@@ -129,6 +152,7 @@ __global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int 
 		my_strcpy(curOut->key, "");
 		curOut->value = 0;
 	}
+#endif
 }
 
 __global__ void kernGetCount(KeyIntValuePair* in, int length, int end) {
