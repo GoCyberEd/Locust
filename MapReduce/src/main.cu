@@ -14,7 +14,7 @@
 #include "util.h"
 #include "KeyValue.h"
 
-#define MAX_LINES_FILE_READ 1024
+#define MAX_LINES_FILE_READ 4500
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
 #define GPU_IMPLEMENTATION 1
@@ -267,11 +267,12 @@ __host__ int main(int argc, char* argv[]) {
 	typedef std::chrono::high_resolution_clock Clock;
 
 	std::cout << "Running\n";
+	char* filename = "hamlet.txt";
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile("LICENSE", file_kvs, &length);
+	loadFile(filename, file_kvs, &length);
 	printf("Length: %i\n", length);
 
 	KeyValuePair* dev_file_kvs = NULL;
@@ -282,14 +283,14 @@ __host__ int main(int argc, char* argv[]) {
 	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
 
 	auto t0 = Clock::now();
-	kernMap << <128, 128 >> > (dev_file_kvs, dev_map_kvs, length);
+	kernMap << <128, 256 >> > (dev_file_kvs, dev_map_kvs, length);
 	auto t1 = Clock::now();
 	printf("GPU mapping %d nanoseconds \n", t1 - t0);
 
 	// stream compaction
 	KeyIntValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyIntValueNotEmpty());
 	int kv_num_map = iter_end - dev_map_kvs;
-	printf("Remain kv number is %d \n", kv_num_map);
+	//printf("Remain kv number is %d \n", kv_num_map);
 	thrust::device_ptr<KeyIntValuePair> dev_ptr(dev_map_kvs);
 	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num_map, KIVComparator());
 
@@ -312,7 +313,7 @@ __host__ int main(int argc, char* argv[]) {
 
 	
 	auto t3 = Clock::now();
-	kernFindUniqBool << <128, 128 >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
+	kernFindUniqBool << <128, 256 >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
 
 
 	//KeyIntValuePair* reduce_kvs = NULL;
@@ -323,7 +324,7 @@ __host__ int main(int argc, char* argv[]) {
 	KeyIntValuePair* iter_end_reduce = thrust::partition(thrust::device, dev_reduce_kvs, dev_reduce_kvs + kv_num_map, KeyIntValueNotEmpty());
 	int kv_num_reduce = iter_end_reduce - dev_reduce_kvs;
 
-	kernGetCount << <128, 128 >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
+	kernGetCount << <128, 256 >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
 
 	auto t4 = Clock::now();
 	printf("GPU reduce %d nanoseconds \n", t4 - t3);
@@ -345,7 +346,7 @@ __host__ int main(int argc, char* argv[]) {
 #else
 	int length = 0;
 	KeyValuePair* file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile("LICENSE", file_kvs, &length);
+	loadFile(filename, file_kvs, &length);
 	KeyValuePair* map_kvs[MAX_EMITS] = { NULL };
 	auto t0 = Clock::now();
 	cpuMap(file_kvs, map_kvs, length);
@@ -383,5 +384,6 @@ __host__ int main(int argc, char* argv[]) {
 #endif
 	
 	std::cout << "\nDone\n";
+	std::cin.ignore();
 	return 0;
 }
