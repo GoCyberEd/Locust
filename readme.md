@@ -14,8 +14,18 @@ A quote from NetworkWorld about distributed MapReduce on a GPU explains, "most o
 ### Process
 1. Read the input file line by line to the files_keyvaluepair, key is the line number and value is all character of this line.
 2. Mapping stage, predefine a emit number for each line as the largest number of words in a line, create a map_keyvaluepair array with length as emits per line times maximum number of line. Then read each files_keyvaluepair, parse it in to different words, and set correspoding map_keyvaluepair key as the word, and value as one.
+
+![](img/map.png) 
+
 3. Processing map_keyvaluepair before reduce stage, sort the array of map_keyvaluepair to put all pairs with same key together.
+
+![](img/process.png) 
+
 4. Reducing stage, find all keyvaluepair has different key as the previous one, and store its index, create reduce_keyvaluepair, the key is the word, the value is the index minus the index of previous index, which is just the count of this word.
+
+![](img/reduce1.png) 
+![](img/reduce2.png) 
+![](img/reduce3.png) 
 
 
 ### CPU Implementation
@@ -37,3 +47,25 @@ A quote from NetworkWorld about distributed MapReduce on a GPU explains, "most o
 5. std::String and String.h is not usable in CUDA, so I have to implemented all the string function such as strlen, strcmp and so on. For normal strtok, it uses a static variable and doesn't support multithreading. I implemented strtok_r instead.
 
 ## Performance Analysis
+
+* Tested on: Windows 10, i7-8750 @ 2.20GHz 16GB, GTX 1060 6GB, Visual Studio 2015, CUDA 8.0(Personal Laptop)
+
+File line num: 700
+
+|Time (ms) | GPU       | CPU           |
+| ---------|:---------:|:-------------:|
+|Map   | 0.047     | 2.333 |
+|Process| 27.646 | 23.699 |
+|Reduce | 1.712  | 1.100   |
+
+![](img/GPUvsCPU.png)  
+
+File line num: 4500
+
+|Time (ms) | GPU       | GPU shared memory           |
+| ---------|:---------:|:-------------:|
+|Map   | 0.040   | 0.040 |
+|Process| 78.176 | 73.015 |
+|Reduce | 4.459  | 4.338   |
+
+![](img/GPUvsGPUshared.png)  
