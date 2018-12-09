@@ -18,6 +18,12 @@
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
 #define GPU_IMPLEMENTATION 1
+#define SHARE_MEMORY 1
+
+#define GRID_SIZE 128
+#define BLOCK_SIZE 256
+
+#define SHARED_MEMORY_SIZE 32
 
 #define WINDOWS 0
 #define LINUX 1
@@ -80,11 +86,6 @@ __host__ __device__ void printKeyIntValues(KeyIntValuePair* kvs, int length) {
 	}
 }
 
-__host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
-	//out[n] = new KeyValuePair(kv);
-	
-}
-
 __host__ __device__ void map(KeyValuePair kv, KeyIntValuePair* out, int i, bool is_device) {
 	char* pSave = NULL;
 	char* tokens = my_strtok_r(kv.value, " ,.-;:'()\"\t", &pSave);
@@ -113,16 +114,37 @@ __global__ void kernMap(KeyValuePair* in, KeyIntValuePair* out, int length) {
 __global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
-	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
+#if SHARE_MEMORY
+	if (i == 0) {
 		KeyIntValuePair* curOut = &out[i];
-		//char* value;
-		//my_itoa(i, value, 10);
 		my_strcpy(curOut->key, in[i].key);
-		//printf("curOut->key is %s \n", curOut->key);
 		curOut->value = i;
 		curOut->count = 0;
-		//printf("curOut->value is %d \n", curOut->value);
-		//my_strcpy(curOut->value, value);
+		return;
+	}
+	__shared__ KeyIntValuePair shared_kvs[BLOCK_SIZE];
+	shared_kvs[i % BLOCK_SIZE] = in[i];
+	__syncthreads();
+	if (i % BLOCK_SIZE != 0 && my_strcmp(shared_kvs[i % BLOCK_SIZE - 1].key, shared_kvs[i % BLOCK_SIZE].key)) {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, in[i].key);
+		curOut->value = i;
+		curOut->count = 0;
+		return;
+	}
+	else if (i % BLOCK_SIZE == 0 && my_strcmp(in[i].key, in[i - 1].key)) {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, in[i].key);
+		curOut->value = i;
+		curOut->count = 0;
+		return;
+	}
+#else
+	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, in[i].key);
+		curOut->value = i;
+		curOut->count = 0;
 		return;
 	}
 	else {
@@ -130,6 +152,7 @@ __global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int 
 		my_strcpy(curOut->key, "");
 		curOut->value = 0;
 	}
+#endif
 }
 
 __global__ void kernGetCount(KeyIntValuePair* in, int length, int end) {
@@ -283,7 +306,7 @@ __host__ int main(int argc, char* argv[]) {
 	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
 
 	auto t0 = Clock::now();
-	kernMap << <128, 256 >> > (dev_file_kvs, dev_map_kvs, length);
+	kernMap << <GRID_SIZE, BLOCK_SIZE >> > (dev_file_kvs, dev_map_kvs, length);
 	auto t1 = Clock::now();
 	printf("GPU mapping %d nanoseconds \n", t1 - t0);
 
@@ -313,7 +336,7 @@ __host__ int main(int argc, char* argv[]) {
 
 	
 	auto t3 = Clock::now();
-	kernFindUniqBool << <128, 256 >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
+	kernFindUniqBool << <GRID_SIZE, BLOCK_SIZE >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
 
 
 	//KeyIntValuePair* reduce_kvs = NULL;
@@ -324,7 +347,7 @@ __host__ int main(int argc, char* argv[]) {
 	KeyIntValuePair* iter_end_reduce = thrust::partition(thrust::device, dev_reduce_kvs, dev_reduce_kvs + kv_num_map, KeyIntValueNotEmpty());
 	int kv_num_reduce = iter_end_reduce - dev_reduce_kvs;
 
-	kernGetCount << <128, 256 >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
+	kernGetCount << <GRID_SIZE, BLOCK_SIZE >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
 
 	auto t4 = Clock::now();
 	printf("GPU reduce %d nanoseconds \n", t4 - t3);
