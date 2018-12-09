@@ -158,6 +158,23 @@ __global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int 
 __global__ void kernGetCount(KeyIntValuePair* in, int length, int end) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
+#if SHARE_MEMORY
+	__shared__ KeyIntValuePair shared_kvs_count[BLOCK_SIZE];
+	shared_kvs_count[i % BLOCK_SIZE] = in[i];
+	__syncthreads();
+	if (i == length - 1) {
+		KeyIntValuePair* curOut = &in[i];
+		curOut->count = end - curOut->value;
+		return;
+	}
+	KeyIntValuePair* curOut = &in[i];
+	if (i % BLOCK_SIZE == BLOCK_SIZE - 1) {
+		curOut->count = in[i + 1].value - curOut->value;
+	}
+	else {
+		curOut->count = shared_kvs_count[i % BLOCK_SIZE + 1].value - curOut->value;
+	}
+#else
 	KeyIntValuePair* curOut = &in[i];
 	if (i == length - 1) {
 		curOut->count = end - curOut->value;
@@ -165,7 +182,9 @@ __global__ void kernGetCount(KeyIntValuePair* in, int length, int end) {
 	else {
 		curOut->count = in[i + 1].value - curOut->value;
 	}
+#endif
 }
+
 #else
 
 __host__ void loadFile(char fname[], KeyValuePair** kvs, int* length) {
