@@ -27,6 +27,7 @@ include_directories(.)
 cuda_add_executable(${CMAKE_PROJECT_NAME}
     "src/main.cu"
     "src/KeyValue.cu"
+    "src/util.cu"
     )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}
