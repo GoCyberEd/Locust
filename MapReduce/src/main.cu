@@ -33,6 +33,9 @@
 #define MODE_SINGLE	1
 #define MODE_MULTI	2
 
+#define STAGE_MAP		1
+#define STAGE_REDUCE	2
+
 #if GPU_IMPLEMENTATION
 __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length, int line_start, int line_end) {
 	std::ifstream input(fname);
@@ -353,6 +356,9 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 #endif
 
 __host__ int main(int argc, char* argv[]) {
+	typedef std::chrono::high_resolution_clock Clock;
+	std::cout << "Running\n";
+
 	if (argc < 2) {
 		printf("Missing or invalid arguments.\n");
 		printf("mapreduce <filename> [line_start] [line_end] [node_num] [stage]\n");
@@ -366,27 +372,35 @@ __host__ int main(int argc, char* argv[]) {
 		end_line = strtol(argv[3], &ptr, 10);
 		printf("Using custom start and end locations: (%i, %i)\n", start_line, end_line);
 	}
+	int stage = 0;
+	int mode = MODE_SINGLE;
+	int node_num = 0;
+	if (argc > 4) {
+		char* ptr;
+		node_num = strtol(argv[4], &ptr, 10);
+		stage = strtol(argv[5], &ptr, 10);
+		if (stage) {
+			mode = MODE_MULTI;
+		}
+	}
 
-	//TODO: determine mode based on argv param
-	int mode = MODE_MULTI;
-
-	typedef std::chrono::high_resolution_clock Clock;
-
-	std::cout << "Running\n";
 	char* filename = argv[1];
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
+
+	KeyIntValuePair* dev_map_kvs = NULL;
+	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
+
+	KeyValuePair* dev_file_kvs = NULL;
+
+	if (!stage || stage == STAGE_MAP) {
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
 	loadFile(filename, file_kvs, &length, start_line, end_line);
 	printf("Length: %i\n", length);
 
-	KeyValuePair* dev_file_kvs = NULL;
 	cudaMalloc((void **)&dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair));
 	cudaMemcpy(dev_file_kvs, file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair), cudaMemcpyHostToDevice);
-
-	KeyIntValuePair* dev_map_kvs = NULL;
-	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
 
 	auto t0 = Clock::now();
 	kernMap << <GRID_SIZE, BLOCK_SIZE >> > (dev_file_kvs, dev_map_kvs, length);
@@ -415,19 +429,26 @@ __host__ int main(int argc, char* argv[]) {
 		writeKeyIntValues(f, map_kvs, MAX_EMITS);
 		fclose(f);
 		printf("MODE_MULTI: Finished map\n");
+		return 0; //Exit, master will start back up
+	}
+	}
+
+	if (!stage || stage == STAGE_REDUCE) {
+	if (mode == MODE_MULTI) {
 
 		// TODO: Refactor into it's own call
 		KeyIntValuePair* reduce_kvs = (KeyIntValuePair*)malloc(MAX_EMITS * sizeof(KeyIntValuePair));
 		loadIntermediateFile("/tmp/out.txt", reduce_kvs, &length, -1, -1);
-		printKeyIntValues(reduce_kvs, length);
 
-		return 0; //Exit, master will start back up
+		// Copy to device
+		cudaMemcpy(dev_map_kvs, reduce_kvs, MAX_EMITS * sizeof(KeyIntValuePair), cudaMemcpyHostToDevice);
+		//printKeyIntValues(reduce_kvs, length);
 	}
+	KeyIntValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyIntValueNotEmpty());
+	int kv_num_map = iter_end - dev_map_kvs;
 
 	KeyIntValuePair* dev_reduce_kvs = NULL;
 	cudaMalloc((void **)&dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair));
-
-
 	
 	auto t3 = Clock::now();
 	kernFindUniqBool << <GRID_SIZE, BLOCK_SIZE >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
@@ -453,11 +474,16 @@ __host__ int main(int argc, char* argv[]) {
 
 	//free(map_kvs);
 
-	cudaFree(dev_file_kvs);
+	if (!stage || stage == STAGE_MAP) {
+		cudaFree(dev_file_kvs);
+	}
 	cudaFree(dev_map_kvs);
 
-	free(reduce_kvs);
-	cudaFree(dev_reduce_kvs);
+	if (!stage || stage == STAGE_REDUCE) {
+		free(reduce_kvs);
+		cudaFree(dev_reduce_kvs);
+	}
+	}
  
 	
 #else
