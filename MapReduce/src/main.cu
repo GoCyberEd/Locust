@@ -31,18 +31,23 @@
 #define COMPILE_OS WINDOWS
 
 #if GPU_IMPLEMENTATION
-__host__ void loadFile(char fname[], KeyValuePair* kvs, int* length) {
+__host__ void loadFile(char fname[], KeyValuePair* kvs, int* length, int line_start, int line_end) {
 #if COMPILE_OS == WINDOWS
 	std::ifstream input(fname);
-	int line_num = 0;
+	int line_num = -1;
 	for (std::string line; getline(input, line); )
 	{
+		line_num++;
+		if (line_start != -1 && line_start > line_num) {
+			continue;
+		} else if (line_start!= -1 && line_num >= line_end) {
+			break;
+		}
 		char *cstr = new char[line.length() + 1];
 		my_strcpy(cstr, line.c_str());
 		//itoa(line_num, kvs[line_num].key, 10);
 		snprintf(kvs[line_num].key,10,"%d", line_num);
 		my_strcpy(kvs[line_num].value, cstr);
-		line_num++;
 		delete[] cstr;
 	}
 	*length = line_num;
@@ -321,7 +326,7 @@ __host__ int main(int argc, char* argv[]) {
 	// Sort filtered map output
 	int length = 0;
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile(filename, file_kvs, &length);
+	loadFile(filename, file_kvs, &length, -1, -1);
 	printf("Length: %i\n", length);
 
 	KeyValuePair* dev_file_kvs = NULL;
