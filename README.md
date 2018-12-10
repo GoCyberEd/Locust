@@ -51,6 +51,8 @@ A quote from NetworkWorld about distributed MapReduce on a GPU explains, "most o
 
 * Tested on: Windows 10, i7-8750 @ 2.20GHz 16GB, GTX 1060 6GB, Visual Studio 2015, CUDA 8.0(Personal Laptop)
 
+### Performance for GPU implementation
+
 File line num: 700
 
 |Time (ms) | GPU       | CPU           |
@@ -61,6 +63,8 @@ File line num: 700
 
 ![](img/GPUvsCPU.png)  
 
+Compare to CPU version, the mapping stage has a great improvement in mapping stage. But for sorting and reducing, the GPU version will cost more time.
+
 File line num: 4500
 
 |Time (ms) | GPU       | GPU shared memory           |
@@ -70,3 +74,11 @@ File line num: 4500
 |Reduce | 4.459  | 4.338   |
 
 ![](img/GPUvsGPUshared.png)  
+
+Using shared memory in reducing stage, which can increase the performance a little bit.
+
+### Performance for distributed mapreduce
+
+![](img/distributedMode.png)  
+
+![](img/fileSize.png)  
