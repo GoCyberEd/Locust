@@ -90,16 +90,25 @@ __host__ __device__ void printKeyValues(KeyValuePair* kvs, int length) {
 	}
 }
 
+__host__ void writeKeyIntValues(std::FILE* stream, KeyIntValuePair* kvs, int length) {
+	for (int i = 0; i < length; i++) {
+		if (my_strlen(kvs[i].key) == 0) {
+			//printf("[%i = null]\n", i);
+		} else {
+			fprintf(stream, "%s \t%d\n", kvs[i].key, kvs[i].count);
+		}
+	}
+}
+
 __host__ __device__ void printKeyIntValues(KeyIntValuePair* kvs, int length) {
 	for (int i = 0; i < length; i++) {
 		if (my_strlen(kvs[i].key) == 0) {
 			//printf("[%i = null]\n", i);
-		}
-		else {
+		} else {
+			// Can't just call writeKeyIntValues due to stdout being undefined in device
 			printf("print key: %s \t count: %d\n", kvs[i].key, kvs[i].count);
 		}
-	}
-}
+	}}
 
 __host__ __device__ void map(KeyValuePair kv, KeyIntValuePair* out, int i, bool is_device) {
 	char* pSave = NULL;
@@ -323,12 +332,10 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 }
 #endif
 
-
-
 __host__ int main(int argc, char* argv[]) {
 	if (argc < 2) {
 		printf("Missing or invalid arguments.\n");
-		printf("mapreduce <filename> [line_start] [line_end] [node_num]\n");
+		printf("mapreduce <filename> [line_start] [line_end] [node_num] [stage]\n");
 		return -1;
 	}
 	int start_line = -1;
@@ -339,6 +346,9 @@ __host__ int main(int argc, char* argv[]) {
 		end_line = strtol(argv[3], &ptr, 10);
 		printf("Using custom start and end locations: (%i, %i)\n", start_line, end_line);
 	}
+
+	//TODO: determine mode based on argv param
+	int mode = MODE_MULTI;
 
 	typedef std::chrono::high_resolution_clock Clock;
 
@@ -373,15 +383,20 @@ __host__ int main(int argc, char* argv[]) {
 	auto t2 = Clock::now();
 	printf("GPU stream compaction and sorting %d nanoseconds \n", t2 - t1);
 
+	// MULTI_STAGE
+	if (mode == MODE_MULTI) {
+		// Move to host memory
+		KeyIntValuePair* map_kvs = (KeyIntValuePair*)malloc(MAX_EMITS * sizeof(KeyIntValuePair));
+		cudaMemcpy(map_kvs, dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+		//printKeyIntValues(map_kvs, MAX_EMITS);
 
-	//KeyIntValuePair* map_kvs = NULL;
-	//map_kvs = (KeyIntValuePair*)malloc(kv_num_map * sizeof(KeyIntValuePair));
-	//cudaMemcpy(map_kvs, dev_map_kvs, kv_num_map * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
-	//printKeyIntValues(map_kvs, kv_num_map);
-
-	//bool* bool_array = NULL;
-	//cudaMalloc((void **)&bool_array, kv_num * sizeof(bool));
-	//cudaMemset(bool_array, 0, kv_num * sizeof(bool));
+		// Write intermediate results to file
+		std::FILE* f = fopen("/tmp/out.txt", "w");
+		writeKeyIntValues(f, map_kvs, MAX_EMITS);
+		fclose(f);
+		printf("MODE_MULTI: Finished map\n");
+		return 0; //Exit, master will start back up
+	}
 
 	KeyIntValuePair* dev_reduce_kvs = NULL;
 	cudaMalloc((void **)&dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair));
