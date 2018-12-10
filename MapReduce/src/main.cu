@@ -35,7 +35,6 @@
 
 #if GPU_IMPLEMENTATION
 __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length, int line_start, int line_end) {
-#if COMPILE_OS == WINDOWS
 	std::ifstream input(fname);
 	int line_num = -1;
 	for (std::string line; getline(input, line); )
@@ -59,24 +58,45 @@ __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length, int line_st
 	}
 	if (line_start < 0) line_start = 0;
 	*length = line_num - line_start;
-#elif COMPILE_OS == LINUX
-	FILE* fp = fopen(fname, "r");
-	if (fp == NULL)
-	    exit(EXIT_FAILURE);
+}
 
-	char* line = NULL;
-	size_t len = 0;
-	int line_num = 0;
-	while ((getline(&line, &len, fp)) != -1) {
-	    //printf("%s", line);
-	    kvs[line_num] = new KeyValuePair(line_num, line);
-	    line_num ++;
+__host__ void loadIntermediateFile(char fname[], KeyIntValuePair* kvs, int* length, int line_start, int line_end) {
+	std::ifstream input(fname);
+	int line_num = -1;
+	for (std::string line; getline(input, line); )
+	{
+		line_num++;
+		int line_idx = line_num;
+		if (line_start != -1 && line_start > line_num) {
+			continue;
+		} else if (line_start!= -1 && line_num >= line_end) {
+			break;
+		}
+		if (line_start != -1) {
+			line_idx = line_num - line_start;
+		}
+		char *cstr = new char[line.length() + 1];
+		my_strcpy(cstr, line.c_str());
+
+		// Split on first tab
+		int i = 0;
+		while (cstr[i] != '\0') {
+			if (cstr[i] == '\t') {
+				cstr[i] = '\0';
+				i++;
+				break;
+			}
+			i++;
+		}
+		my_strcpy(kvs[line_idx].key, cstr);
+		int val = strtol(&cstr[i], (char **)NULL, 10);
+		kvs[line_idx].value = val;
+		kvs[line_idx].count = 0;
+
+		delete[] cstr;
 	}
-	fclose(fp);
-	if (line)
-	    free(line);
-	*length = line_num;
-#endif
+	if (line_start < 0) line_start = 0;
+	*length = line_num - line_start;
 }
 
 
@@ -95,7 +115,7 @@ __host__ void writeKeyIntValues(std::FILE* stream, KeyIntValuePair* kvs, int len
 		if (my_strlen(kvs[i].key) == 0) {
 			//printf("[%i = null]\n", i);
 		} else {
-			fprintf(stream, "%s \t%d\n", kvs[i].key, kvs[i].count);
+			fprintf(stream, "%s \t%d\n", kvs[i].key, kvs[i].value);
 		}
 	}
 }
@@ -106,7 +126,7 @@ __host__ __device__ void printKeyIntValues(KeyIntValuePair* kvs, int length) {
 			//printf("[%i = null]\n", i);
 		} else {
 			// Can't just call writeKeyIntValues due to stdout being undefined in device
-			printf("print key: %s \t count: %d\n", kvs[i].key, kvs[i].count);
+			printf("print key: %s \t val: %d \t count: %d\n", kvs[i].key, kvs[i].value, kvs[i].count);
 		}
 	}}
 
@@ -395,6 +415,12 @@ __host__ int main(int argc, char* argv[]) {
 		writeKeyIntValues(f, map_kvs, MAX_EMITS);
 		fclose(f);
 		printf("MODE_MULTI: Finished map\n");
+
+		// TODO: Refactor into it's own call
+		KeyIntValuePair* reduce_kvs = (KeyIntValuePair*)malloc(MAX_EMITS * sizeof(KeyIntValuePair));
+		loadIntermediateFile("/tmp/out.txt", reduce_kvs, &length, -1, -1);
+		printKeyIntValues(reduce_kvs, length);
+
 		return 0; //Exit, master will start back up
 	}
 
