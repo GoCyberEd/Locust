@@ -15,7 +15,7 @@ Single, memory mode:
 
     ./MapReduce input_file.txt
 
-For distributed mode, create a txt file in the format <ip> <port> like the following:
+For distributed mode, create a txt file in the format `ip_address port` like the following:
 
     192.168.0.2 80000
     192.168.0.3 80000
