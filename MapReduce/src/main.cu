@@ -270,12 +270,14 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 __host__ int main(int argc, char* argv[]) {
 	typedef std::chrono::high_resolution_clock Clock;
 
+	char* filename = argv[1];
+
 	std::cout << "Running\n";
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile("try.txt", file_kvs, &length);
+	loadFile(filename, file_kvs, &length);
 	printf("Length: %i\n", length);
 	//printKeyValues(file_kvs, length);
 
