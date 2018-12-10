@@ -17,7 +17,7 @@
 #define MAX_LINES_FILE_READ 1024
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
-#define GPU_IMPLEMENTATION 0
+#define GPU_IMPLEMENTATION 1
 
 #define WINDOWS 0
 #define LINUX 1
@@ -270,6 +270,7 @@ __host__ int main(int argc, char* argv[]) {
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
 	loadFile("LICENSE", file_kvs, &length);
 	printf("Length: %i\n", length);
+	//printKeyValues(file_kvs, length);
 
 	KeyValuePair* dev_file_kvs = NULL;
 	cudaMalloc((void **)&dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair));
@@ -280,22 +281,24 @@ __host__ int main(int argc, char* argv[]) {
 	kernMap << <128, 128 >> > (dev_file_kvs, dev_map_kvs, length);
 	
 
-
 	KeyValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyValueNotEmpty());
 	int kv_num_map = iter_end - dev_map_kvs;
 	printf("Remain kv number is %d \n", kv_num_map);
 	thrust::device_ptr<KeyValuePair> dev_ptr(dev_map_kvs);
 	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num_map, KVComparator());
+	printf("Sorting finished...");
 
 	KeyValuePair* map_kvs = NULL;
 	map_kvs = (KeyValuePair*)malloc(kv_num_map * sizeof(KeyValuePair));
 	cudaMemcpy(map_kvs, dev_map_kvs, kv_num_map * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
-	//printKeyValues(map_kvs, kv_num_map);
 
-	//bool* bool_array = NULL;
-	//cudaMalloc((void **)&bool_array, kv_num * sizeof(bool));
-	//cudaMemset(bool_array, 0, kv_num * sizeof(bool));
+	
 
+	cudaFree(dev_file_kvs);
+	cudaFree(dev_map_kvs);
+	free(map_kvs);
+
+	/*
 	KeyIntValuePair* dev_reduce_kvs = NULL;
 	cudaMalloc((void **)&dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair));
 
@@ -316,7 +319,7 @@ __host__ int main(int argc, char* argv[]) {
 	cudaFree(dev_map_kvs);
 
 	free(reduce_kvs);
-	cudaFree(dev_reduce_kvs);
+	cudaFree(dev_reduce_kvs);*/
  
 	
 #else
