@@ -12,6 +12,7 @@ A quote from NetworkWorld about distributed MapReduce on a GPU explains, "most o
 ## WordCount Example
 
 ### Process
+![](img/MapReduce.gif) 
 1. Read the input file line by line to the files_keyvaluepair, key is the line number and value is all character of this line.
 2. Mapping stage, predefine a emit number for each line as the largest number of words in a line, create a map_keyvaluepair array with length as emits per line times maximum number of line. Then read each files_keyvaluepair, parse it in to different words, and set correspoding map_keyvaluepair key as the word, and value as one.
 
