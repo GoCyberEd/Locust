@@ -30,6 +30,9 @@
 #define LINUX 1
 #define COMPILE_OS WINDOWS
 
+#define MODE_SINGLE	1
+#define MODE_MULTI	2
+
 #if GPU_IMPLEMENTATION
 __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length, int line_start, int line_end) {
 #if COMPILE_OS == WINDOWS
@@ -38,19 +41,24 @@ __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length, int line_st
 	for (std::string line; getline(input, line); )
 	{
 		line_num++;
+		int line_idx = line_num;
 		if (line_start != -1 && line_start > line_num) {
 			continue;
 		} else if (line_start!= -1 && line_num >= line_end) {
 			break;
 		}
+		if (line_start != -1) {
+			line_idx = line_num - line_start;
+		}
 		char *cstr = new char[line.length() + 1];
 		my_strcpy(cstr, line.c_str());
 		//itoa(line_num, kvs[line_num].key, 10);
-		snprintf(kvs[line_num].key,10,"%d", line_num);
-		my_strcpy(kvs[line_num].value, cstr);
+		snprintf(kvs[line_idx].key,10,"%d", line_num);
+		my_strcpy(kvs[line_idx].value, cstr);
 		delete[] cstr;
 	}
-	*length = line_num;
+	if (line_start < 0) line_start = 0;
+	*length = line_num - line_start;
 #elif COMPILE_OS == LINUX
 	FILE* fp = fopen(fname, "r");
 	if (fp == NULL)
@@ -318,9 +326,18 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 
 
 __host__ int main(int argc, char* argv[]) {
-	if (argc < 1) {
-		printf("Must specify input filename");
+	if (argc < 2) {
+		printf("Missing or invalid arguments.\n");
+		printf("mapreduce <filename> [line_start] [line_end] [node_num]\n");
 		return -1;
+	}
+	int start_line = -1;
+	int end_line = -1;
+	if (argc > 2) {
+		char* ptr;
+		start_line = strtol(argv[2], &ptr, 10);
+		end_line = strtol(argv[3], &ptr, 10);
+		printf("Using custom start and end locations: (%i, %i)\n", start_line, end_line);
 	}
 
 	typedef std::chrono::high_resolution_clock Clock;
@@ -331,7 +348,7 @@ __host__ int main(int argc, char* argv[]) {
 	// Sort filtered map output
 	int length = 0;
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile(filename, file_kvs, &length, -1, -1);
+	loadFile(filename, file_kvs, &length, start_line, end_line);
 	printf("Length: %i\n", length);
 
 	KeyValuePair* dev_file_kvs = NULL;
@@ -443,6 +460,6 @@ __host__ int main(int argc, char* argv[]) {
 #endif
 	
 	std::cout << "\nDone\n";
-	std::cin.ignore();
+	//std::cin.ignore();
 	return 0;
 }
