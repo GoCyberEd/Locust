@@ -17,9 +17,9 @@ Single, memory mode:
 
 For distributed mode, create a txt file in the format `ip_address port` like the following:
 
-    192.168.0.2 80000
-    192.168.0.3 80000
-    192.168.0.4 80000
+    192.168.0.2 1337 
+    192.168.0.3 1337
+    192.168.0.4 1337
 
 The slave script should be invoked on each node. Finally, the provided bash script will launch the MapReduce program for all nodes.
 
