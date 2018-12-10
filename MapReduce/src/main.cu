@@ -318,10 +318,15 @@ __host__ void cpuReduce(KeyValuePair** in, KeyValuePair** out, int length) {
 
 
 __host__ int main(int argc, char* argv[]) {
+	if (argc < 1) {
+		printf("Must specify input filename");
+		return -1;
+	}
+
 	typedef std::chrono::high_resolution_clock Clock;
 
 	std::cout << "Running\n";
-	char* filename = "../hamlet.txt";
+	char* filename = argv[1];
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
