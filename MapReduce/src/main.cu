@@ -14,10 +14,14 @@
 #include "util.h"
 #include "KeyValue.h"
 
-#define MAX_LINES_FILE_READ 1024
+#define MAX_LINES_FILE_READ 512
 #define EMITS_PER_LINE 20
 #define MAX_EMITS (MAX_LINES_FILE_READ * EMITS_PER_LINE)
 #define GPU_IMPLEMENTATION 1
+
+
+#define GRID_SIZE 128
+#define BLOCK_SIZE 256
 
 #define WINDOWS 0
 #define LINUX 1
@@ -32,7 +36,7 @@ __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length) {
 	{
 		char *cstr = new char[line.length() + 1];
 		my_strcpy(cstr, line.c_str());
-		itoa(line_num, kvs[line_num].key, 10);
+		my_itoa(line_num, kvs[line_num].key, 10);
 		my_strcpy(kvs[line_num].value, cstr);
 		line_num++;
 		delete[] cstr;
@@ -85,10 +89,14 @@ __host__ __device__ void emit(KeyValuePair kv, KeyValuePair** out, int n) {
 	
 }
 
-__host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int i, bool is_device) {
-	if (my_strlen(kv.value) == 0) {
-		return;
+
+__host__ void cpuMap(KeyValuePair* in, KeyValuePair** out, int length) {
+	for (int i = 0; i < length; i++) {
+		//map(in[i], out[i], i, 0);
 	}
+}
+
+__host__ __device__ void map(KeyValuePair kv, KeyIntValuePair* out, int i, bool is_device) {
 	char* pSave = NULL;
 	char* tokens = my_strtok_r(kv.value, " ,.-;:'()\"\t", &pSave);
 	int count = 0;
@@ -97,40 +105,39 @@ __host__ __device__ void map(KeyValuePair kv, KeyValuePair* out, int i, bool is_
 			printf("WARN: Exceeded emit limit\n");
 			break;
 		}
-		KeyValuePair* curOut = &out[i * EMITS_PER_LINE + count];
+		KeyIntValuePair* curOut = &out[i * EMITS_PER_LINE + count];
 		my_strcpy(curOut->key, tokens);
-		my_strcpy(curOut->value, "1");
+		curOut->value = 1;
+		//my_strcpy(curOut->value, "1");
 		//printf("out [%d][%d] key: %s, value: %s \n", i, count, curOut->key, curOut->value);
 		tokens = my_strtok_r(NULL, " ,.-;:'()\"\t", &pSave);
 		count++;
 	}
 }
 
-__host__ void cpuMap(KeyValuePair* in, KeyValuePair** out, int length) {
-	for (int i = 0; i < length; i++) {
-		map(in[i], out[i], i, 0);
-	}
-}
-
-__global__ void kernMap(KeyValuePair* in, KeyValuePair* out, int length) {
+__global__ void kernMap(KeyValuePair* in, KeyIntValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
 	map(in[i], out, i, 1);
 }
 
-__global__ void kernFindUniqBool(KeyValuePair* in, KeyIntValuePair* out, int length) {
+__global__ void kernFindUniqBool(KeyIntValuePair* in, KeyIntValuePair* out, int length) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
 	if (i >= length) return;
 	if (i == 0 || my_strcmp(in[i].key, in[i - 1].key)) {
 		KeyIntValuePair* curOut = &out[i];
-		//char* value;
-		//my_itoa(i, value, 10);
 		my_strcpy(curOut->key, in[i].key);
 		curOut->value = i;
-		//my_strcpy(curOut->value, value);
+		curOut->count = 0;
 		return;
 	}
+	else {
+		KeyIntValuePair* curOut = &out[i];
+		my_strcpy(curOut->key, "");
+		curOut->value = 0;
+	}
 }
+
 
 __global__ void kernGetCount(KeyIntValuePair* in, int length, int end) {
 	int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -268,7 +275,7 @@ __host__ int main(int argc, char* argv[]) {
 	// Sort filtered map output
 	int length = 0;
 	KeyValuePair file_kvs[MAX_LINES_FILE_READ] = { NULL };
-	loadFile("LICENSE", file_kvs, &length);
+	loadFile("try.txt", file_kvs, &length);
 	printf("Length: %i\n", length);
 	//printKeyValues(file_kvs, length);
 
@@ -276,50 +283,65 @@ __host__ int main(int argc, char* argv[]) {
 	cudaMalloc((void **)&dev_file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair));
 	cudaMemcpy(dev_file_kvs, file_kvs, MAX_LINES_FILE_READ * sizeof(KeyValuePair), cudaMemcpyHostToDevice);
 
-	KeyValuePair* dev_map_kvs = NULL;
-	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyValuePair));
-	kernMap << <128, 128 >> > (dev_file_kvs, dev_map_kvs, length);
-	
+	KeyIntValuePair* dev_map_kvs = NULL;
+	cudaMalloc((void **)&dev_map_kvs, MAX_EMITS * sizeof(KeyIntValuePair));
 
-	KeyValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyValueNotEmpty());
+	kernMap << <GRID_SIZE, BLOCK_SIZE >> > (dev_file_kvs, dev_map_kvs, length);
+
+
+
+	// stream compaction
+	KeyIntValuePair* iter_end = thrust::partition(thrust::device, dev_map_kvs, dev_map_kvs + MAX_EMITS, KeyIntValueNotEmpty());
 	int kv_num_map = iter_end - dev_map_kvs;
 	printf("Remain kv number is %d \n", kv_num_map);
-	thrust::device_ptr<KeyValuePair> dev_ptr(dev_map_kvs);
-	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num_map, KVComparator());
-	printf("Sorting finished...");
 
-	KeyValuePair* map_kvs = NULL;
-	map_kvs = (KeyValuePair*)malloc(kv_num_map * sizeof(KeyValuePair));
-	cudaMemcpy(map_kvs, dev_map_kvs, kv_num_map * sizeof(KeyValuePair), cudaMemcpyDeviceToHost);
+	KeyIntValuePair* host_kvs = NULL;
+	host_kvs = (KeyIntValuePair*)malloc(kv_num_map * sizeof(KeyIntValuePair));
+	cudaMemcpy(host_kvs, dev_map_kvs, kv_num_map * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+	printKeyIntValues(host_kvs, kv_num_map);
 
+	thrust::device_ptr<KeyIntValuePair> dev_ptr(dev_map_kvs);
+	printf("ptr set...");
+	
+	thrust::sort(thrust::device, dev_ptr, dev_ptr + kv_num_map, KIVComparator());
+	printf("sort finished...");
+
+	KeyIntValuePair* host_kvs_1 = NULL;
+	host_kvs_1 = (KeyIntValuePair*)malloc(kv_num_map * sizeof(KeyIntValuePair));
+	cudaMemcpy(host_kvs_1, dev_map_kvs, kv_num_map * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+	printKeyIntValues(host_kvs_1, kv_num_map);
 	
 
-	cudaFree(dev_file_kvs);
-	cudaFree(dev_map_kvs);
-	free(map_kvs);
-
-	/*
 	KeyIntValuePair* dev_reduce_kvs = NULL;
 	cudaMalloc((void **)&dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair));
 
-	kernFindUniqBool << <128, 128 >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
+
+	kernFindUniqBool << <GRID_SIZE, BLOCK_SIZE >> >(dev_map_kvs, dev_reduce_kvs, kv_num_map);
+
+
+	KeyIntValuePair* reduce_kvs = NULL;
+	reduce_kvs = (KeyIntValuePair*)malloc(kv_num_map * sizeof(KeyIntValuePair));
+	cudaMemcpy(reduce_kvs, dev_reduce_kvs, kv_num_map * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+	printKeyIntValues(reduce_kvs, kv_num_map);
+
 	KeyIntValuePair* iter_end_reduce = thrust::partition(thrust::device, dev_reduce_kvs, dev_reduce_kvs + kv_num_map, KeyIntValueNotEmpty());
 	int kv_num_reduce = iter_end_reduce - dev_reduce_kvs;
 
-	kernGetCount << <128, 128 >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
+	kernGetCount << <GRID_SIZE, BLOCK_SIZE >> >(dev_reduce_kvs, kv_num_reduce, kv_num_map);
 
-	KeyIntValuePair* reduce_kvs = NULL;
-	reduce_kvs = (KeyIntValuePair*)malloc(kv_num_reduce * sizeof(KeyIntValuePair));
-	cudaMemcpy(reduce_kvs, dev_reduce_kvs, kv_num_reduce * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
-	printKeyIntValues(reduce_kvs, kv_num_reduce);
 
-	free(map_kvs);
+	KeyIntValuePair* reduce_kvs_1 = NULL;
+	reduce_kvs_1 = (KeyIntValuePair*)malloc(kv_num_reduce * sizeof(KeyIntValuePair));
+	cudaMemcpy(reduce_kvs_1, dev_reduce_kvs, kv_num_reduce * sizeof(KeyIntValuePair), cudaMemcpyDeviceToHost);
+	printKeyIntValues(reduce_kvs_1, kv_num_reduce);
+
 
 	cudaFree(dev_file_kvs);
 	cudaFree(dev_map_kvs);
-
 	free(reduce_kvs);
-	cudaFree(dev_reduce_kvs);*/
+	cudaFree(dev_reduce_kvs);
+	free(host_kvs);
+	free(host_kvs_1);
  
 	
 #else
