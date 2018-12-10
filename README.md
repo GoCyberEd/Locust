@@ -9,6 +9,20 @@ Traditionally, this is accomplished on a CPU using software such as Hadoop. To a
 
 A quote from NetworkWorld about distributed MapReduce on a GPU explains, "most of [the frameworks] are no longer supported and were built for particular scientific projects." This is the need we hope to fulfill.
 
+## Usage
+
+Single, memory mode:
+
+    ./MapReduce input_file.txt
+
+For distributed mode, create a txt file in the format `ip_address port` like the following:
+
+    192.168.0.2 1337 
+    192.168.0.3 1337
+    192.168.0.4 1337
+
+The slave script should be invoked on each node. Finally, the provided bash script will launch the MapReduce program for all nodes.
+
 ## WordCount Example
 
 ### Process
