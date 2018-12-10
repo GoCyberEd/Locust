@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <string>
 #include <stdio.h>
+#include <stdlib.h>
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -38,7 +39,8 @@ __host__ void loadFile(char fname[], KeyValuePair* kvs, int* length) {
 	{
 		char *cstr = new char[line.length() + 1];
 		my_strcpy(cstr, line.c_str());
-		itoa(line_num, kvs[line_num].key, 10);
+		//itoa(line_num, kvs[line_num].key, 10);
+		snprintf(kvs[line_num].key,10,"%d", line_num);
 		my_strcpy(kvs[line_num].value, cstr);
 		line_num++;
 		delete[] cstr;
@@ -314,7 +316,7 @@ __host__ int main(int argc, char* argv[]) {
 	typedef std::chrono::high_resolution_clock Clock;
 
 	std::cout << "Running\n";
-	char* filename = "vgilante.txt";
+	char* filename = "../hamlet.txt";
 #if GPU_IMPLEMENTATION
 	// Sort filtered map output
 	int length = 0;
